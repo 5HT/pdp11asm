@@ -1,0 +1,2 @@
+../release/pdp11asm bk0010_miner.asm && wine ~/bin/emu/EMU.exe bk0010_miner.bin 
+
