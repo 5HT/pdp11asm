@@ -1,4 +1,4 @@
-//! Добавить H числа
+//! Р”РѕР±Р°РІРёС‚СЊ H С‡РёСЃР»Р°
 // PDP11 Assembler (c) 15-01-2015 vinxru
 
 #include "parser.h"
@@ -8,7 +8,7 @@
 
 static std::string i2s(size_t i) {
   char buf[32];
-  snprintf(buf, sizeof(buf), "%i", int(i)); // а х.з.
+  snprintf(buf, sizeof(buf), "%i", int(i)); // Р° С….Р·.
   return buf;
 }
 
@@ -68,7 +68,7 @@ void Parser::getLabel(Label& label) {
 
 void Parser::init(const char* buf) {
   line = col = 1;
-  prevCursor = cursor = buf;
+  firstCursor = prevCursor = cursor = buf;
   token = ttEof;   
   altstring = 0;
   nextToken();
@@ -77,7 +77,7 @@ void Parser::init(const char* buf) {
 //-----------------------------------------------------------------------------
 
 void Parser::nextToken() {
-  // Сохраняем прошлый токен
+  // РЎРѕС…СЂР°РЅСЏРµРј РїСЂРѕС€Р»С‹Р№ С‚РѕРєРµРЅ
   switch((unsigned)token) {
     case ttWord:
     case ttString1:
@@ -88,7 +88,7 @@ void Parser::nextToken() {
       loadedNum = tokenNum;
   }
 
-  // sig - это до пробелов
+  // sig - СЌС‚Рѕ РґРѕ РїСЂРѕР±РµР»РѕРІ
   sigCol=col-1;
   sigLine=line;
   sigCursor = cursor;
@@ -98,10 +98,10 @@ void Parser::nextToken() {
             if(*cursor==10) { line++; col=1; }
             else if(*cursor!=13) col++;
 
-        // Парсим
+        // РџР°СЂСЃРёРј
         tokenText[0]=0;
 retry:
-        // Пропускаем пробелы
+        // РџСЂРѕРїСѓСЃРєР°РµРј РїСЂРѕР±РµР»С‹
         prevLine=line;
         prevCol =col;
         prevCursor=cursor;
@@ -126,7 +126,7 @@ retry:
     const char* s=cursor;
     nextToken2();
 
-    // Увеличиваем курсор
+    // РЈРІРµР»РёС‡РёРІР°РµРј РєСѓСЂСЃРѕСЂ
     for(;s<cursor;s++)
       if(*s==10) { line++; col=1; } else
       if(*s!=13) col++;
@@ -225,18 +225,18 @@ void Parser::nextToken2() {
     bool neg = (c=='-');
     if(neg) c = *cursor++;
 
-    // Если число начинается с 0x - то читаем 16-ричное    
+    // Р•СЃР»Рё С‡РёСЃР»Рѕ РЅР°С‡РёРЅР°РµС‚СЃСЏ СЃ 0x - С‚Рѕ С‡РёС‚Р°РµРј 16-СЂРёС‡РЅРѕРµ    
     if(c=='0' && radix==0) {
       if(cursor[0]=='x' || cursor[0]=='X') {
-        cursor+=2; // Пропускаем X
+        cursor+=2; // РџСЂРѕРїСѓСЃРєР°РµРј X
         radix = 16;
       } else {
-        // Если число начинается с 0 - то читаем 8-ричное    
+        // Р•СЃР»Рё С‡РёСЃР»Рѕ РЅР°С‡РёРЅР°РµС‚СЃСЏ СЃ 0 - С‚Рѕ С‡РёС‚Р°РµРј 8-СЂРёС‡РЅРѕРµ    
         radix = 8;
       }
     }
 
-    // Ищем конец числа и определяем возможныцй тип
+    // РС‰РµРј РєРѕРЅРµС† С‡РёСЃР»Р° Рё РѕРїСЂРµРґРµР»СЏРµРј РІРѕР·РјРѕР¶РЅС‹С†Р№ С‚РёРї
     bool cb=true, co=true, cd=true;
     cursor--;
     const char* e = cursor; 
@@ -249,7 +249,7 @@ void Parser::nextToken2() {
       if(c>='0' && c<='9') continue; cd = false;
     }
 
-    // Постфикс определяет тип числа    
+    // РџРѕСЃС‚С„РёРєСЃ РѕРїСЂРµРґРµР»СЏРµС‚ С‚РёРї С‡РёСЃР»Р°    
     const char* pe = e;    
     switch(c) {
       case 'b': case 'B': if(radix==16) syntaxError("Incorrect number"); radix = 2; pe++; break;
@@ -259,14 +259,14 @@ void Parser::nextToken2() {
       default: if(radix==0) radix = cfg_decimalnumbers ? 10 : 8;
     }
 
-    // Контроль
+    // РљРѕРЅС‚СЂРѕР»СЊ
     switch(radix) {
       case 2: if(!cb) syntaxError("Incorrect number");
       case 8: if(!co) syntaxError("Incorrect number");
       case 10: if(!cd) syntaxError("Incorrect number");
     }
 
-    // Преобразуем
+    // РџСЂРµРѕР±СЂР°Р·СѓРµРј
     num_t n = 0;
     for(;cursor < e; cursor++) {
       c = *cursor;      
@@ -281,14 +281,14 @@ void Parser::nextToken2() {
     return;
   }
  
-  // Одиночный символ
+  // РћРґРёРЅРѕС‡РЅС‹Р№ СЃРёРјРІРѕР»
   token = ttOperator;
   tokenText[0] = c;
   tokenText[1] = 0;
 
-  // Составной оператор
+  // РЎРѕСЃС‚Р°РІРЅРѕР№ РѕРїРµСЂР°С‚РѕСЂ
   if(cfg_operators) {
-    // Добавляем остальные символы
+    // Р”РѕР±Р°РІР»СЏРµРј РѕСЃС‚Р°Р»СЊРЅС‹Рµ СЃРёРјРІРѕР»С‹
     tokenText_ptr = 1;
     for(;;) {
       c = *cursor;
@@ -302,7 +302,7 @@ void Parser::nextToken2() {
     }
     tokenText[tokenText_ptr]=0;
   }
-  // Комментарии
+  // РљРѕРјРјРµРЅС‚Р°СЂРёРё
   if(cfg_remark) {
     for(int j=0; cfg_remark[j]; j++) {
       if(0==strcmp(tokenText,cfg_remark[j])) {
@@ -362,6 +362,7 @@ void Parser::enterMacro(int killMacro, std::string* buf, int disabledMacro, bool
   //m.sigLine   =sigLine;
   m.killMacro =killMacro;
   m.fileName  = fileName;
+  m.prevFirstCursor = firstCursor;
   fileName = "DEFINE";
   if(buf) {
     m.buffer.swap(*buf);
@@ -370,7 +371,7 @@ void Parser::enterMacro(int killMacro, std::string* buf, int disabledMacro, bool
 
       line=1;
       col=1;
-      prevCursor = cursor = m.buffer.c_str();
+      firstCursor = prevCursor = cursor = m.buffer.c_str();
       token = ttEof;
       if(!dontCallNextToken) nextToken();
   }
@@ -389,6 +390,7 @@ void Parser::leaveMacro() {
   fileName  =m.fileName;
   //sigCol    =m.sigCol;
   //sigLine   =m.sigLine;
+  firstCursor = m.prevFirstCursor;
   jump(m.pl, true);
   for(int i=0; i<m.killMacro; i++)
     macro.pop_back();

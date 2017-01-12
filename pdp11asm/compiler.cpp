@@ -3,8 +3,10 @@
 #include "compiler.h"
 #include <string.h>
 #include <stdio.h>
-#include <fstream> //! Убрать
+#include <fstream> //! ??????
 #include "fstools.h"
+#include "c_parser.h"
+#include "c_compiler_pdp11.h"
 
 static unsigned char cp1251_to_koi8r_tbl[256] = {
   0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,
@@ -29,7 +31,7 @@ static void cp1251_to_koi8r(char* str) {
 Compiler::Compiler() {
   convert1251toKOI8R = false;
   processor = P_PDP11;
-  need_create_output_file = true;
+  needCreateOutputFile = true;
   lstWriter.out = &out;
   lstWriter.p = &p;
   p.cfg_eol = true;
@@ -60,30 +62,30 @@ itsLabel:
     return true;
   }
   if(p.ifToken(ttString1)) {
-    out = (unsigned char)p.loadedText[0]; 
-    if(convert1251toKOI8R) out = cp1251_to_koi8r_tbl[out]; 
-    return true; 
+    out = (unsigned char)p.loadedText[0];
+    if(convert1251toKOI8R) out = cp1251_to_koi8r_tbl[out];
+    return true;
   }
-  if(p.ifToken(ttInteger)) { 
-    out = p.loadedNum; 
+  if(p.ifToken(ttInteger)) {
+    out = p.loadedNum;
     return true;
   }
   Parser::Label l(p);
-  if(p.ifToken("-")) { 
+  if(p.ifToken("-")) {
     if(p.ifToken(ttInteger)) {
       out = 0-p.loadedNum;
-      return true; 
+      return true;
     }
     p.jump(l);
   }
   Parser::Label pl(p);
   if(p.ifToken("(")) {
-	if(regInParser()) { p.jump(pl); return false; }
+    if(regInParser()) { p.jump(pl); return false; }
     out = readConst3(numIsLabel);
     p.needToken(")");
     return true;
   }
-  if(p.ifToken(".") || p.ifToken("$")) { 
+  if(p.ifToken(".") || p.ifToken("$")) {
     out = this->out.writePtr;
     return true;
   }
@@ -185,18 +187,18 @@ void Compiler::makeLocalLabelName() {
 
 bool Compiler::compileLine2() {
 //retry:
-  // Метки и константы определяются по второму слову
+  // ????? ? ????????? ???????????? ?? ??????? ?????
   Parser::Label l(p);
   p.nextToken();
-  // Первый токен должен быть числом или строкой.	
+  // ?????? ????? ?????? ???? ?????? ??? ???????.
 //  bool label = (p.token==ttOperator && p.tokenText[0]==':' && p.tokenText[1]==0);
 //  bool datadecl = (p.token==ttWord && (0==strcmp(p.tokenText, "DB") || 0==strcmp(p.tokenText, "DW") || 0==strcmp(p.tokenText, "DS")));
   bool equ   = (p.token==ttWord && 0==strcmp(p.tokenText, "EQU")) || (p.token==ttOperator && 0==strcmp(p.tokenText, "="));
   p.jump(l);
 
-  // Это константа
-  if(equ) {    
-    p.needToken(ttWord);         
+  // ??? ?????????
+  if(equ) {
+    p.needToken(ttWord);
     Parser::TokenText name;
     strcpy(name, p.loadedText);
     if(!p.ifToken("=")) p.needToken("equ");
@@ -205,13 +207,13 @@ bool Compiler::compileLine2() {
     return true;
   }
 
-  // Установка адреса
+  // ????????? ??????
   if(p.ifToken("org")) {
     compileOrg();
     return true;
   }
 
-    // Команды MACRO11
+    // ??????? MACRO11
     if(p.ifToken(".")) {
         if(p.ifToken("include")) {
             p.needToken(ttString2);
@@ -222,7 +224,7 @@ bool Compiler::compileLine2() {
             p.fileName = fileName1;
             return true;
         };
-    // Выбор процессора
+    // ????? ??????????
     if(p.ifToken("i8080")) {
       lstWriter.hexMode = true;
       processor = P_8080;
@@ -234,35 +236,35 @@ bool Compiler::compileLine2() {
       processor = P_PDP11;
       return true;
     }
-    // Вставить байты
-    if(p.ifToken("db") || p.ifToken("byte")) { 
+    // ???????? ?????
+    if(p.ifToken("db") || p.ifToken("byte")) {
       compileByte();
-      return true; 
+      return true;
     }
-    if(p.ifToken("dw") || p.ifToken("word")) { 
-      compileWord(); 
-      return true; 
+    if(p.ifToken("dw") || p.ifToken("word")) {
+      compileWord();
+      return true;
     }
-    if(p.ifToken("end")) { 
-      return true; 
+    if(p.ifToken("end")) {
+      return true;
     }
-    if(p.ifToken("link")) { 
+    if(p.ifToken("link")) {
       compileOrg();
-      return true; 
+      return true;
     }
-    if(p.ifToken("ds") || p.ifToken("blkb")) { 
-      p.needToken(ttInteger); 
+    if(p.ifToken("ds") || p.ifToken("blkb")) {
+      p.needToken(ttInteger);
       for(;p.tokenNum>0; p.tokenNum--) out.write8(0);
       return true;
     }
-    if(p.ifToken("blkw")) { 
+    if(p.ifToken("blkw")) {
       p.needToken(ttInteger);
-      for(;p.tokenNum>0; p.tokenNum--) out.write16(0); 
+      for(;p.tokenNum>0; p.tokenNum--) out.write16(0);
       return true;
     }
     p.altstring = '/';
-    if(p.ifToken("ascii")) {      
-      p.altstring = 0;      
+    if(p.ifToken("ascii")) {
+      p.altstring = 0;
       p.needToken(ttString2);
       if(convert1251toKOI8R) cp1251_to_koi8r(p.loadedText);
       out.write(p.loadedText, strlen(p.loadedText));
@@ -272,10 +274,10 @@ bool Compiler::compileLine2() {
     p.syntaxError();
   }
 
-  // Создание выходного файла
+  // ???????? ????????? ?????
   bool make_binary_file = p.ifToken("make_binary_file");
   if(make_binary_file || p.ifToken("make_bk0010_rom")) {
-    need_create_output_file = false;
+    needCreateOutputFile = false;
     p.needToken(ttString2);
     Parser::TokenText fileName;
     strcpy(fileName, p.loadedText);
@@ -284,7 +286,7 @@ bool Compiler::compileLine2() {
       start = ullong2size_t(readConst3());
       if(p.ifToken(",")) stop = ullong2size_t(readConst3());
     }
-    // Работает только на втором проходе
+    // ???????? ?????? ?? ?????? ???????
     if(step2) {
       if(stop<=start || stop>sizeof(out.writeBuf)) p.syntaxError();
       size_t length = stop - start;
@@ -298,7 +300,7 @@ bool Compiler::compileLine2() {
       /*
       std::ofstream f;
       f.open(fileName, std::ofstream::binary|std::ofstream::out);
-      if(!f.is_open()) p.syntaxError("Can't create file");      
+      if(!f.is_open()) p.syntaxError("Can't create file");
       if(!make_binary_file) {
         f.write((const char*)&start, 2);
         f.write((const char*)&length, 2);
@@ -330,11 +332,11 @@ bool Compiler::compileLine2() {
       start = ullong2size_t(readConst3());
       if(p.ifToken(",")) size = ullong2size_t(readConst3());
     }
-    std::ifstream f; //! Заменить
+    std::ifstream f; //! ????????
     if(size==0 || step2) {
       f.open(fileName, std::ifstream::binary|std::ifstream::in);
       if(!f.is_open()) p.syntaxError("Can't open file");
-      if(size==0) size = (size_t)f.rdbuf()->pubseekoff(0, std::ifstream::end);  //! Тут может быть переполнение
+      if(size==0) size = (size_t)f.rdbuf()->pubseekoff(0, std::ifstream::end);  //! ??? ????? ???? ????????????
     }
     if(size<0 || out.writePtr+size>=65536) p.syntaxError();
     if(step2) {
@@ -342,11 +344,11 @@ bool Compiler::compileLine2() {
       f.rdbuf()->sgetn(out.writePtr+out.writeBuf, size);
       out.write(out.writePtr+out.writeBuf, size);
     }
-//    out.writePtr += (int)size; // Переполнение проверено выше
+//    out.writePtr += (int)size; // ???????????? ????????? ????
     return true;
   }
 
-  // Выровнять код
+  // ????????? ???
   if(p.ifToken("align")) {
     p.needToken(ttInteger);
     if(p.loadedNum < 1 || p.loadedNum >= std::numeric_limits<size_t>::max()) p.syntaxError();
@@ -354,19 +356,19 @@ bool Compiler::compileLine2() {
     out.writePtr = (out.writePtr + a - 1) / a * a;
     return true;
   }
-  // Вставить байты
+  // ???????? ?????
   if(p.ifToken("db")) {
     compileByte();
     return true;
   }
-  // Вставить слово
+  // ???????? ?????
   if(p.ifToken("dw")) {
     compileWord();
     return true;
   }
   if(p.ifToken("end")) return true;
-  if(p.ifToken("ds")) { 
-    p.needToken(ttInteger); 
+  if(p.ifToken("ds")) {
+    p.needToken(ttInteger);
     for(;p.tokenNum>0; p.tokenNum--) out.write8(0);
     return true;
   }
@@ -382,7 +384,7 @@ void Compiler::compileLine() {
   for(;;) {
   if(compileLine2()) return;
 
-  // Это метка
+  // ??? ?????
   if(p.ifToken(ttInteger)) {
     makeLocalLabelName();
     labels[p.loadedText] = out.writePtr;
@@ -391,52 +393,116 @@ void Compiler::compileLine() {
     labels[p.loadedText] = out.writePtr;
     strcpy(lastLabel, p.loadedText);
   }
-  // Не обязательно
+  // ?? ???????????
   p.ifToken(":");
 
-  // После метки может идти команда
+  // ????? ????? ????? ???? ???????
   if(p.token == ttEol) return;
   if(p.token == ttEof) return;
   }
 }
 
 //-----------------------------------------------------------------------------
+// Р Р°СЃСЃС‚Р°РЅРѕРІРєР° Р°РґСЂРµСЃРѕРІ
 
-void Compiler::compileFile(syschar_t* fileName) {
-  // Загрузка файла
+void Compiler::processLabels()
+{
+    for(unsigned i=0; i<fixups.size(); i++)
+    {
+        Fixup& f = fixups[i];
+        std::map<std::string, Parser::num_t>::iterator j = labels.find(f.name);
+        if(j == labels.end()) throw std::runtime_error("РњРµС‚РєР° "+f.name+" РЅРµ РЅР°Р№РґРµРЅР°");
+        *(uint16_t*)(out.writeBuf + f.addr) = j->second;
+    }
+}
+
+//-----------------------------------------------------------------------------
+
+void Compiler::compileFile(const syschar_t* fileName) {
+  // ???????? ?????
   loadStringFromFile(p.source, fileName);
 
-  // Установка пути для INCLUDE-файлов
+  // ????????? ???? ??? INCLUDE-??????
   chdirToFile(fileName);
 
-  // Два прохода
+  C::Tree world;
+  C::CompilerPdp11 cc(*this, world);
+  C::Parser cp(p, world);
+
+  // ??? ???????
+  out.clear();
   for(int s=0; s<2; s++) {
     step2 = s==1;
     p.init(p.source.c_str());
-    out.init();      
+    out.init();
     strcpy(lastLabel, "undefined");
     while(!p.ifToken(ttEof)) {
       if(p.ifToken(ttEol)) continue;
-      if(step2) lstWriter.beforeCompileLine();
-      compileLine();
-      if(step2) lstWriter.afterCompileLine();        
+
+      // ????????? ??????
+      if(p.ifToken("{")) {
+          cp.parse(s);
+          cc.start(s);
+      }
+      else
+      {
+        if(step2) lstWriter.beforeCompileLine();
+        compileLine();
+        if(step2) lstWriter.afterCompileLine3();
+      }
       if(p.ifToken(ttEof)) break;
-      //! Теперь в одной строке может быть много команд  p.needToken(ttEol);
+      if(s==0) processLabels();
+      //! ?????? ? ????? ?????? ????? ???? ????? ??????  p.needToken(ttEol);
     }
   }
 
-  if(need_create_output_file && out.min<out.max) {
+  if(needCreateOutputFile && out.min<out.max) {
     sysstring_t fileName2 = replaceExtension(fileName, "bin");
     if(fileName != fileName2) {
       saveStringToFile(fileName2.c_str(), out.writeBuf+out.min, out.max-out.min);
       /*
       std::ofstream f;
       f.open(fileName2.c_str(), std::ofstream::binary|std::ofstream::out);
-      if(!f.is_open()) p.syntaxError("Can't create file");      
+      if(!f.is_open()) p.syntaxError("Can't create file");
       f.write(out.writeBuf+out.min, out.max-out.min);
       f.close();
-      lstWriter.writeFile(fileName);    
+      lstWriter.writeFile(fileName);
       */
     }
   }
 }
+
+//-----------------------------------------------------------------------------
+// Р”РёР·Р°СЃСЃРµРјР±Р»РµСЂ
+
+void Compiler::disassembly(unsigned s, unsigned e)
+{
+    size_t r = 0;
+    while(s<e)
+    {
+        while(r<lstWriter.remarks.size() && lstWriter.remarks[r].addr <= s)
+        {
+            LstWriter::Remark& re = lstWriter.remarks[r];
+            if(re.addr == s)
+            {
+                lstWriter.beforeCompileLine();
+                lstWriter.afterCompileLine2();
+                if(re.type==0) lstWriter.appendBuffer("//");
+                lstWriter.appendBuffer(re.text.c_str());
+                if(re.type==1) lstWriter.appendBuffer(":");
+                lstWriter.appendBuffer("\r\n");
+            }
+            r++;
+        }
+
+        lstWriter.beforeCompileLine();
+        char buf[disassemblyPdp11OutSize];
+        s += disassemblyPdp11(buf, (uint16_t*)(out.writeBuf + s), e-s, s);
+        out.writePtr = s;
+        lstWriter.afterCompileLine2();
+        lstWriter.appendBuffer("    ");
+        lstWriter.appendBuffer(buf);
+        lstWriter.appendBuffer("\r\n");
+    }
+}
+

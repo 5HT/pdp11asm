@@ -3,11 +3,15 @@ CONFIG += console c++11
 CONFIG -= app_bundle
 CONFIG -= qt
 
-SOURCES += pdp11asm.cpp \
-           c_8080.cpp \
-           c_bitmap.cpp \
-           c_common.cpp \
-           c_pdp11.cpp \
+SOURCES += main.cpp \
+           8080.cpp \
+           bitmap.cpp \
+           compiler.cpp \
+           pdp11.cpp \
+           c_asm_pdp11.cpp \
+           c_compiler_pdp11.cpp \
+           c_tree.cpp \
+           c_parser.cpp \
            lstwriter.cpp \
            fstools.cpp \
            parser.cpp

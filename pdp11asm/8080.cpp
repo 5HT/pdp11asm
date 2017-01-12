@@ -12,11 +12,11 @@ struct Command {
 };
 
 bool Compiler::compileLine_8080() {
-  static const char* r8[] = { "b", "c", "d", "e", "h", "l", "m", "a", 0 }; // Ñ_R8 C_R8I8
+  static const char* r8[] = { "b", "c", "d", "e", "h", "l", "m", "a", 0 }; // ?_R8 C_R8I8
   static const char* r16[] = { "b","d","h","sp",0 }; // C_R16 C_R16I16
   static const char* bd[] = { "b","d",0 }; // C_BD
   static const char* r16psw[] = { "b","d","h","psw",0 }; // C_R16PSW
-	
+
   static Command allCommands[] = {
     { "add",  C_R8,     0, 0x80 },
     { "adi",  C_I8,     0, 0xC6 },
@@ -109,14 +109,14 @@ bool Compiler::compileLine_8080() {
       case C_R8R8:   opcode |= p.needToken(r8) << 3; p.needToken(",");
       case C_R8:     out.write8(opcode | (p.needToken(r8) << c.shl)); break;
       case C_R16:    out.write8(opcode | (p.needToken(r16) << c.shl)); break;
-      case C_R16PSW: out.write8(opcode | (p.needToken(r16psw) << c.shl)); break; 
+      case C_R16PSW: out.write8(opcode | (p.needToken(r16psw) << c.shl)); break;
       case C_R8I8:   opcode |= p.needToken(r8) << c.shl; p.needToken(",");
       case C_I8:     i = readConst3(); out.write8(opcode); out.write8(i); break;
       case C_R16I16: opcode |= p.needToken(r16) << c.shl; p.needToken(",");
       case C_I16:    i = readConst3(); out.write8(opcode); out.write16(i); break;
       case C_BD:     out.write8(opcode | (p.needToken(bd) << c.shl)); break;
       case C_NONE:   out.write8(opcode);
-    }      
+    }
     return true;
   }
 

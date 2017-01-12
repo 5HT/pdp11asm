@@ -1,18 +1,58 @@
-loc_1120:
-dec (R1)
-beq loc_1160
-bvs loc_1150 ; выдаёт ошибку ***
-ADD #167777, R1
-mov R1, -(R4) ;44
-br loc_1170 ;46
+    org 1000h
+entry:
+    MOV #1000h, SP
+    BR MAIN
+{
 
-loc_1150: dec R0
+void test(int b)
+{
+    int a = b;
+}
 
-loc_1152: movb (R0), -(R4)
-movb -(R0), -(R4)
-br loc_1120
+void main() 
+{
+    int16_t o = 1;
+    o = o-o;
+    uint16_t* a;
+    test(1);
+    for(;;)
+    {
+        a = (uint16_t*)0x4000;
+	do
+        {
+	    uint16_t x = 0;
+	    do {
+        	*a ^= 0xAAAA;
+        	a++;
+		x++;
+	    } while(x < 32);
+	    do {
+        	*a ^= 0x5555;
+        	a++;
+		x++;
+	    } while(x < 64);
+	} 
+	while(a < (uint16_t*)0x8000);
 
-loc_1160: movb -(R0), R2
-loc_1170:
+        a = (uint16_t*)0x8000;
+	do
+        {
+	    uint16_t x = 0;
+	    do {
+        	a--;
+        	*a ^= 0xAAAA;
+		x++;
+	    } while(x < 32);
+	    do {
+        	a--;
+        	*a ^= 0x5555;
+		x++;
+	    } while(x < 64);
+	} 
+	while(a > (uint16_t*)0x4000);
+    }
+}
 
-.end
+}
+
+make_bk0010_rom "test.bin", entry

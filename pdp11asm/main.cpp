@@ -9,22 +9,29 @@ int _tmain(int argc, wchar_t** argv) {
 #else // LINUX
 int main(int argc, char** argv) {
 #endif
+    printf("PDP11/8080 Assebler/C\nPRE PRE PRE ALPHA VERSION\b2017 (c) aleksey.f.morozov@gmail.com\n");
     try {
-        // Ожидается один аргумент
+        Compiler c;
+
+        // DEBUG
+//        c.compileFile("../Test4/test.asm");
+//        std::cout << "Done" << std::endl;
+//        return 0;
+
+        // РћР¶РёРґР°РµС‚СЃСЏ РѕРґРёРЅ Р°СЂРіСѓРјРµРЅС‚
         if(argc != 2) {
             std::cout << "Specify one file name on the command line" << std::endl;
             return 0;
         }
     
-        // Компиляция
-        Compiler c;
+        // РљРѕРјРїРёР»СЏС†РёСЏ
         c.compileFile(argv[1]);
 
-        // Выход без ошибок
+        // Р’С‹С…РѕРґ Р±РµР· РѕС€РёР±РѕРє
         std::cout << "Done" << std::endl;
         return 0;
 
-        // Выход с ошибками
+        // Р’С‹С…РѕРґ СЃ РѕС€РёР±РєР°РјРё
     } catch(std::exception& e) {
         std::cout << e.what() << std::endl;
         return 1;

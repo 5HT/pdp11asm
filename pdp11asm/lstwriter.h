@@ -6,23 +6,35 @@
 #include "parser.h"
 #include "fstools.h"
 
-class LstWriter {
+class LstWriter
+{
 public:
-  std::string buffer;
-  size_t prev_writePtr;
-  const char* prev_sigCursor;
-  Output* out;
-  Parser* p;
-  bool hexMode;
+    class Remark
+    {
+    public:
+        size_t addr;
+        unsigned type;
+        std::string text;
+    };
 
-  inline LstWriter() { hexMode=false; prev_writePtr=0; prev_sigCursor=0; out=0; p=0; }
-  void beforeCompileLine();
-  void afterCompileLine();
+    std::string buffer;
+    size_t prev_writePtr;
+    const char* prev_sigCursor;
+    Output* out;
+    Parser* p;
+    bool hexMode;
+    std::vector<Remark> remarks;
 
-  void writeFile(const std::string& fileName);
-  void writeFile(const std::wstring& fileName);
+    inline LstWriter() { hexMode=false; prev_writePtr=0; prev_sigCursor=0; out=0; p=0; }
+    void beforeCompileLine();
+    void afterCompileLine3();
+    void afterCompileLine2();
 
-protected:
-  void appendBuffer(const char* data, size_t size);
-  inline void appendBuffer(const char* data) { appendBuffer(data, strlen(data)); }
+    void writeFile(const std::string& fileName);
+    void writeFile(const std::wstring& fileName);
+
+    void appendBuffer(const char* data, size_t size);
+    inline void appendBuffer(const char* data) { appendBuffer(data, strlen(data)); }
+
+    void remark(size_t addr, unsigned type, const std::string& text);
 };

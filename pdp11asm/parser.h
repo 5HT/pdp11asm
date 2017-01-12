@@ -30,6 +30,7 @@ public:
   std::string source;
 
   // Курсор
+  const char *firstCursor;
   const char *cursor, *prevCursor, *sigCursor;
   size_t line, prevLine, sigLine;
   size_t col, prevCol, sigCol;
@@ -66,6 +67,7 @@ public:
   // Сравнение
   inline bool ifToken(Token t) { if(token != t) return false; nextToken(); return true; }
   inline void needToken(Token t) { if(token != t) syntaxError(); nextToken(); }
+  inline const char* needIdent() { needToken(ttWord); return loadedText; }
   bool ifToken(const char* text);  
   inline void needToken(const char* text) { if(!ifToken(text)) syntaxError(); }
   bool ifToken(const char** a, int& n);
@@ -88,6 +90,7 @@ public:
     int killMacro;
     std::string fileName;
     std::string buffer;
+    const char* prevFirstCursor;
     int disabledMacro;
 
     MacroStack() { disabledMacro=-1; }

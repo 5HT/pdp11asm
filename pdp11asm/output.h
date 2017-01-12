@@ -14,13 +14,17 @@ public:
 
   inline Output() {
     init();
+    clear();
+  }
+
+  inline void clear() {
+    memset(writeBuf, 0, sizeof(writeBuf));
   }
 
   inline void init() {
     writePtr = 0;
     writePosChanged = 0;
     min = 0xFFFF, max = 0;
-    memset(writeBuf, 0, sizeof(writeBuf));
   }
 
   inline void write(const void* data, size_t n) {
