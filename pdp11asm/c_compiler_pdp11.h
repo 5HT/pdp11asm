@@ -26,6 +26,7 @@ public:
     std::queue<size_t> writePtrs;
 
     Function* curFn;
+    unsigned  inStack;
 
     CompilerPdp11(Compiler& _compiler, Tree& _world);
     void pushAcc(char pf);

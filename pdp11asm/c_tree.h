@@ -55,8 +55,8 @@ namespace C
     };
 
     enum NodeType {
-      ntConstI, ntConstS, ntConvert, ntCallI, ntCallS, ntDeaddr, ntSwitch, ntLabel,
-      ntReturn, ntMonoOperator, ntOperator, ntJmp, ntIf, ntAsm, ntSP
+      ntConstI, ntConstS, ntConvert, ntCall, ntDeaddr, ntSwitch, ntLabel,
+      ntReturn, ntMonoOperator, ntOperator, ntOperatorIf, ntJmp, ntIf, ntAsm, ntSP
     };
 
     enum Reg {
@@ -174,6 +174,7 @@ namespace C
     class NodeConst : public NodeVar {
     public:
         int32_t value;
+        bool    prepare;
         std::string text;
 
         NodeConst(const std::string& _text, Type _dataType) {
@@ -181,6 +182,7 @@ namespace C
             dataType = _dataType;
             text     = _text;
             value    = 0;
+            prepare  = false;
         }
 
         NodeConst(int32_t _value, Type _dataType = cbtUShort)
@@ -188,31 +190,20 @@ namespace C
             nodeType = ntConstI;
             dataType = _dataType;
             value    = _value;
+            prepare  = false;
         }
 
-        std::string name()
-        {
-            if(nodeType == ntConstI) {
-                char buf[256];
-                snprintf(buf, sizeof(buf), "%i", value);
-                return buf;
-            }
-            if(nodeType == ntConstS) {
-                assert(!text.empty());
-                return text;
-            }
-            throw;
-        }
+        bool isNull() { return value==0 && text.empty(); }
     };
 
     class NodeCall : public NodeVar {
     public:
-      std::vector<NodeVar*> args;
-      int addr;
-      std::string name;
+        std::vector<NodeVar*> args;
+        int addr;
+        std::string name;
 
-      NodeCall(int _addr, Type _dataType, std::vector<NodeVar*>& _args) { nodeType = ntCallI; addr = _addr; dataType = _dataType; args=_args; }
-      NodeCall(const std::string& _name, Type _dataType, std::vector<NodeVar*>& _args) { nodeType = ntCallS; name = _name; dataType = _dataType; args=_args; }
+        NodeCall(int _addr, const std::string& _name, Type _dataType) { nodeType = ntCall; addr = _addr; name = _name; dataType = _dataType; }
+        ~NodeCall() { while(!args.empty()) { delete args.back(); args.pop_back(); } }
     };
 
     class NodeMonoOperator : public NodeVar {
@@ -220,12 +211,8 @@ namespace C
         MonoOperator o;
         NodeVar* a;
 
-        NodeMonoOperator(NodeVar* _a, MonoOperator _o) {
-            nodeType = ntMonoOperator;
-            a        =_a;
-            o        = _o;
-            dataType = a->dataType;
-        }
+        NodeMonoOperator(NodeVar* _a, MonoOperator _o) { nodeType = ntMonoOperator; a =_a; o = _o; dataType = a->dataType; }
+        ~NodeMonoOperator() { delete a; }
     };
 
     class NodeOperator : public NodeVar {
@@ -233,13 +220,19 @@ namespace C
         Operator o;
         NodeVar* a;
         NodeVar* b;
+
+        NodeOperator(const Type& _dataType, Operator _o, NodeVar* _a, NodeVar* _b) { nodeType = ntOperator; dataType = _dataType; o=_o; a=_a; b=_b; }
+        ~NodeOperator() { delete a; delete b; }
+    };
+
+    class NodeOperatorIf : public NodeVar {
+    public:
+        NodeVar* a;
+        NodeVar* b;
         NodeVar* cond;
 
-        NodeOperator(const Type& _dataType, Operator _o, NodeVar* _a, NodeVar* _b, NodeVar* _cond)
-        {
-            dataType = _dataType; o=_o; a=_a; b=_b; cond=_cond;
-            nodeType = ntOperator;
-        }
+        NodeOperatorIf(const Type& _dataType, NodeVar* _a, NodeVar* _b, NodeVar* _cond) { nodeType = ntOperatorIf; dataType = _dataType; a=_a; b=_b; cond=_cond; }
+        ~NodeOperatorIf() { delete a; delete b; delete cond; }
     };
 
     class NodeLabel : public Node {
@@ -279,13 +272,9 @@ namespace C
         Node* t;
         Node* f;
 
-        NodeIf() {
-            nodeType = ntIf;
-            cond = 0;
-            t = 0;
-            f = 0;
-        }
-    };
+        NodeIf(NodeVar* _cond, Node* _t, Node* _f) { nodeType=ntIf; cond=_cond; t=_t; f=_f; }
+        ~NodeIf() { delete cond; delete t; delete f; }
+    };    
 
     class NodeJmp : public Node {
     public:
@@ -302,18 +291,16 @@ namespace C
     };
 
     struct Function {
-        Type retType;
-        std::string name;
+        Type              retType;
+        std::string       name;
         std::vector<Type> args;
-        std::string needInclude;
-        bool callAddr;
-        int addr;
-        unsigned stackSize;
-        Node* rootNode;
-        bool compiled;
-        //std::vector<NodeVariable*> localVars;
+        std::string       needInclude;
+        int               addr;
+        unsigned          stackSize;
+        Node*             rootNode;
+        bool              compiled;
 
-        Function() { compiled=false; rootNode=0; callAddr=false; }
+        Function() { compiled=false; rootNode=0; addr=0; stackSize=0; }
         ~Function() { delete rootNode; }
     };
 
@@ -322,33 +309,52 @@ namespace C
         Type type;
     };
 
+    class GlobalVar {
+    public:
+        std::string          name;
+        Type                 type;
+        bool                 extren1;
+        std::vector<uint8_t> data;
+        bool                 compiled;
+        bool                 z;
+
+        GlobalVar() { extren1=false; z=false; compiled=false; }
+    };
+
     class Tree
     {
     public:
-        std::vector<std::string>   globalVars;
-        std::vector<Type>          globalVarsT;
-        std::list<Typedef>         typedefs;
-        std::list<Struct>          structs;
+        typedef std::map<std::string, unsigned> Unique;
+        std::list<Typedef>   typedefs;
+        std::list<Function>  functions;
+        std::list<GlobalVar> globalVars;
+        Unique               unique;
+        std::list<Struct>    structs;
+
         unsigned                   userStructCnt;
         unsigned                   intLabels;
-        std::list<Function>        functions;
-        Function*                  curFn;
         int                        strsCounter;
         std::map<std::string, int> strs;
 
         Tree()
         {
             userStructCnt = 0;
-            curFn = 0;
             strsCounter = 1;
             intLabels = 0;
         }
 
-        std::string regString(const char* str);
+        std::string regString(const std::string& str);
         Function* findFunction(const std::string& name);
-
+        bool checkUnique(const std::string& name) { return unique.find(name) == unique.end(); }
         static Node* postIncOpt(Node* v);
         static void linkNode(Node*& first, Node*& last, Node* element);
         static Operator inverseOp(Operator o);
+
+        Function*  addFunction (const char* name) { functions.push_back(Function()); Function* f=&functions.back(); f->name=name; unique[name]=1; return f; }
+        GlobalVar* addGlobalVar(const char* name) { globalVars.push_back(GlobalVar()); GlobalVar* v=&globalVars.back(); v->name=name; unique[name]=2; return v; }
+        Typedef*   addTypedef  (const char* name, const Type& type) { typedefs.push_back(Typedef()); Typedef* t=&typedefs.back(); t->name=name; t->type=type; unique[name]=3; return t; }
+
+        unsigned prepare_arg;
+        void prepare(Node* n);
     };
 }

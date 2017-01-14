@@ -5,9 +5,11 @@
 #include <stdio.h>
 #include <string>
 
-static inline void outOfMemory(void* p)
+template<class T>
+static inline T* outOfMemory(T* p)
 {
-    if(!p) throw std::runtime_error("Out of memory");
+    if(p) return p;
+    throw std::runtime_error("Out of memory");
 }
 
 static inline std::string i2s(size_t i)

@@ -35,6 +35,11 @@ public:
     if(max < writePtr) max = writePtr; 
   }
 
+  void align2()
+  {
+     writePtr = (writePtr+1)&~1;
+  }
+
   inline void write16(int n) { 
     write(&n, 2); 
   }

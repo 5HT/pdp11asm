@@ -44,7 +44,8 @@ public:
     Arg11(Arg11Type _type, unsigned _reg, unsigned _value, std::string _str) : type(_type), reg(_reg), value(_value), str(_str) {}
     Arg11(Arg11Type _type=atReg, unsigned _reg=0, unsigned _value=0) : type(_type), reg(_reg), value(_value) {}
 
-    static Arg11 r0,r1,r2,r3,r4,sp;
+    inline static Arg11 val(unsigned value) { return Arg11(atValue, 0, value); }
+    static Arg11 r0,r1,r2,r3,r4,sp,null;
 };
 
 enum Cmd11a
@@ -94,8 +95,7 @@ public:
     void push(Arg11& a);
     void pop(Arg11& a);
     void ret();
-    void call(unsigned addr);
-    void call(const char* name);
+    void call(const char* name, uint16_t addr=0);
     void xor_r_a(unsigned r, Arg11& a);
     void cmd(Cmd11c cmd, unsigned addLocalLabel);
     void addLocalLabel(unsigned n);

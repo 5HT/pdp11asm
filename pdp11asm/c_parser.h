@@ -12,34 +12,33 @@ namespace C
         ::Parser& p;
         Tree& world;
 
-        struct Var
+        struct StackVar
         {
-            int         stackOff;
-            std::string name;
             Type        type;
-            inline Var() { stackOff=-1; }
+            std::string name;
+            unsigned    addr;
+            bool        arg;
         };
 
         NodeLabel* breakLabel, *continueLabel;
         NodeSwitch* lastSwitch;
-        std::vector<Var> stackVars;
+        std::vector<StackVar> stackVars;
         Function* curFn;
 
-        bool p_ifToken(const std::map<std::string,int>& hash, int& n);
         bool p_ifToken(const std::vector<std::string>& strs, int& o);
-        bool p_ifToken(const std::vector<Var>& a, int& o);
-        bool p_ifToken(const std::list<Function>& a, int& o);
+        StackVar* p_ifToken(std::vector<StackVar>& a);
+        Function* p_ifToken(std::list<Function>& a);
+        GlobalVar* p_ifToken(std::list<GlobalVar>& a);
         Operator findOperator(int level, int& l);
         uint32_t readConst(Type& to);
         uint16_t readConstU16();
 
         void parseStruct(Struct& s, int m);
-        NodeIf*  allocNodeIf(NodeVar* _cond, Node* _t, Node* _f);
         NodeJmp* allocJmp(NodeLabel* _label, NodeVar* _cond, bool _ifZero);
         NodeJmp* allocJmp(NodeLabel* _label);
         NodeVar* nodeMonoOperator(NodeVar* a, MonoOperator o);
         NodeVar* nodeAddr(NodeVar* x);
-        NodeVar* getStackVar(Var& x);
+        NodeVar* getStackVar(StackVar& x);
         NodeVar* bindVar_2();
         Type     readType(bool error);
         Struct* parseStruct3(int m);
@@ -51,12 +50,14 @@ namespace C
         Node*    readBlock();
         Node*    readCommand();
         NodeVar* addFlag(NodeVar* a);
-        NodeVar* nodeOperator2(Type type, Operator o, NodeVar* a, NodeVar* b, NodeVar* cond);
+        NodeVar* nodeOperator2(Type type, Operator o, NodeVar* a, NodeVar* b);
+        NodeVar* nodeOperatorIf(Type type, NodeVar* a, NodeVar* b, NodeVar* cond);
         Node*    readCommand1();
         void     getRemark(std::string& out);
         Function*parseFunction(Type& retType, const std::string& fnName);
-        void     arrayInit(std::vector<char>& data, Type& fnType);
+        void     arrayInit(std::vector<uint8_t> &data, Type& fnType);
         void     parse2();
+        bool     checkStackUnique(const char* str);
 
     public:
         inline Parser(::Parser& _p, Tree& _world) : p(_p), world(_world) { breakLabel=0; continueLabel=0; lastSwitch=0; curFn=0; }

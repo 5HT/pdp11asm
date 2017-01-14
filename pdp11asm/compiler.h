@@ -8,6 +8,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include "fstools.h"
+#include "tools.h"
 
 class Compiler {
 public:
@@ -72,7 +73,12 @@ public:
     inline void addFixup(const std::string& name, unsigned d=0)
     {
         fixups.push_back(Fixup(out.writePtr-d, name));
-    }    
+    }
+
+    void addLabel(std::string& name)
+    {
+        labels[ucase(name)] = out.writePtr;
+    }
 };
 
 //-----------------------------------------------------------------------------

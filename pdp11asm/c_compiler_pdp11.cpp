@@ -27,16 +27,16 @@ CompilerPdp11::CompilerPdp11(Compiler& _compiler, Tree& _tree) : out(_compiler),
 
 void CompilerPdp11::pushAcc(char pf)
 {
-    out.push(Arg11::r0);
-    if(pf=='D') out.push(Arg11::r2);
+    out.push(Arg11::r0); inStack += 2;
+    if(pf=='D') { out.push(Arg11::r2); inStack += 2; }
 }
 
 //---------------------------------------------------------------------------------------------------------------------
 
 void CompilerPdp11::popAcc(char pf)
 {
-    if(pf=='D') out.pop(Arg11::r2);
-    out.pop(Arg11::r0);
+    if(pf=='D') { out.pop(Arg11::r2); inStack -= 2; }
+    out.pop(Arg11::r0); inStack -= 2;
 }
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -45,10 +45,12 @@ void CompilerPdp11::popAcc_A2D(char pf)
 {
     out.cmd(cmdMov, Arg11::r0, Arg11::r1);
     out.pop(Arg11::r0);
+    inStack -= 2;
     if(pf=='D')
     {
         out.cmd(cmdMov, Arg11::r2, Arg11::r3);
         out.pop(Arg11::r2);
+        inStack -= 2;
     }
 }
 
@@ -60,12 +62,10 @@ bool CompilerPdp11::compileArg(Arg11& ol, Arg11& oh, NodeVar* a, int d, int dr, 
         a = ((NodeConvert*)a)->var;
 
     // SP можно разметить в аргументе
-    if(a->nodeType == ntSP)
+    if(a->nodeType == ntSP && inStack == 0)
     {
-        ol.type = atReg;
-        ol.reg = 6;
-        oh.type = atValue;
-        oh.value = 0;
+        ol = Arg11::sp;
+        oh = Arg11::null;
         return false;
     }
 
@@ -73,18 +73,17 @@ bool CompilerPdp11::compileArg(Arg11& ol, Arg11& oh, NodeVar* a, int d, int dr, 
     if(a->nodeType == ntConstI)
     {
         unsigned v = a->cast<NodeConst>()->value;
-        ol.type = atValue;
-        ol.value = (v & 0xFFFF);
-        oh.type = atValue;
-        oh.value = (v >> 16);
+        ol = Arg11::val(v & 0xFFFF);
+        oh = Arg11::val(v >> 16);
         return false;
     }
+
     if(a->nodeType == ntConstS)
     {
         ol.type = atValue;
         ol.str = a->cast<NodeConst>()->text;
-        oh.type = atValue;
-        oh.value = 0;
+        ol.value = 0;        
+        oh = Arg11::null;
         return false;
     }
 
@@ -109,6 +108,7 @@ bool CompilerPdp11::compileArg(Arg11& ol, Arg11& oh, NodeVar* a, int d, int dr, 
         if(b->nodeType == ntConstS)
         {
             ol.type = atValueMem;
+            ol.value = 0;
             ol.str = b->cast<NodeConst>()->text;
             oh.type = atValueMem;
             oh.str = b->cast<NodeConst>()->text + "+2";
@@ -139,10 +139,11 @@ bool CompilerPdp11::compileArg(Arg11& ol, Arg11& oh, NodeVar* a, int d, int dr, 
                     {
                         ol.type = dbl ? atRegValueMemMem : atRegValueMem;
                         ol.reg  = 6;
-                        ol.value = off;
+                        ol.value = off + inStack;
                         oh.type = ol.type;
                         oh.reg  = 6;
-                        oh.value = off+2;
+                        oh.value = off + inStack + 2;
+                        //printf("olv=%u\n", ol.value);
                         return false;
                     }
                     // Оптимизация Deaddr(Add(Const,REG)) одной командой
@@ -164,9 +165,10 @@ bool CompilerPdp11::compileArg(Arg11& ol, Arg11& oh, NodeVar* a, int d, int dr, 
         {
             ol.type = dbl ? atRegValueMemMem : atRegMem;
             ol.reg = 6;
-            ol.value = 0;
+            ol.value = inStack;
+
             oh.type = ol.type;
-            oh.value = 2;
+            oh.value = inStack + 2;
             oh.reg = 6;
             return false;
         }
@@ -228,6 +230,7 @@ void CompilerPdp11::compileVar(Node* n, unsigned d, IfOpt* ifOpt)
 
         case ntSP: // Поместить SP в аккумулятор
             out.cmd(cmdMov, Arg11::sp, Arg11(atReg, d));
+            if(inStack) out.cmd(cmdAdd, Arg11::val(inStack), Arg11::sp);
             return;
 
         case ntConstI: // Числовая константа
@@ -273,8 +276,7 @@ void CompilerPdp11::compileVar(Node* n, unsigned d, IfOpt* ifOpt)
             return;
         }
 
-        case ntCallI: // Вызов функции
-        case ntCallS:
+        case ntCall: // Вызов функции
         {
             NodeCall* c = n->cast<NodeCall>();
 
@@ -291,24 +293,25 @@ void CompilerPdp11::compileVar(Node* n, unsigned d, IfOpt* ifOpt)
                 if(v->dataType.is16()) pf='W'; else
                 if(v->dataType.is32()) pf='D'; else throw std::runtime_error("monoOperator !stack");
 
+                //printf("inStack=%u\n", inStack);
                 Arg11 al,ah;
                 compileArg(al,ah,v,0,0,pf);
 
-                if(v->dataType.is8_16()) { ss+=2; out.push(al); } else //! Может в PUSH затолкнуть?
-                if(v->dataType.is32()) { ss+=4; out.push(ah); out.push(al); } else throw std::runtime_error("call !stack");
+                if(v->dataType.is8_16()) { ss+=2; inStack+=2; out.push(al); } else //! Может в PUSH затолкнуть?
+                if(v->dataType.is32()) { ss+=4; inStack+=4; out.push(ah); out.push(al); } else throw std::runtime_error("call !stack");
             }
 
-            //! args?
-            if(c->nodeType == ntCallS) out.call(c->name.c_str());
-                                  else out.call(c->addr);
+            out.call(c->name.c_str(), c->addr);
 
             out.cmd(cmdAdd, Arg11(atValue, 0, ss), Arg11::sp);
+            inStack-=ss;
 
             if(d==1)
             {
                 out.cmd(cmdMov, Arg11::r0, Arg11::r1);
                 if(c->dataType.is32()) out.cmd(cmdMov, Arg11::r2, Arg11::r3);
                 popAcc('D');
+                inStack-=2;
             }
 
             //! Освободить стек
@@ -343,7 +346,7 @@ void CompilerPdp11::compileVar(Node* n, unsigned d, IfOpt* ifOpt)
             NodeReturn* r = n->cast<NodeReturn>();
             if(d != 0) throw std::runtime_error("return !d");
             if(r->var) compileVar(r->var, 0);
-            out.cmd(cmdAdd, Arg11(atValue, 0, curFn->stackSize), Arg11::sp);
+            if(curFn->stackSize != 0) out.cmd(cmdAdd, Arg11(atValue, 0, curFn->stackSize), Arg11::sp);
             out.ret();
             return;
         }
@@ -604,14 +607,14 @@ void CompilerPdp11::compileVar(Node* n, unsigned d, IfOpt* ifOpt)
                     case B | oOr:      out.cmd(cmdBisb, bl, al); break;
                     case B | oXor:     if(bl.type==atReg) out.xor_r_a(bl.reg, al); else { out.cmd(cmdMov, bl, Arg11::r4); out.xor_r_a(4, al); } break; //!!! нет 8 бит
                     case B | oSet:
-                    case B | oSetVoid: if(bl.type == atValue && bl.value == 0) out.cmd(cmdClrb, al); else out.cmd(cmdMovb, bl, al); break;
+                    case B | oSetVoid: if(bl.type == atValue && bl.value == 0 && bl.str.empty()) out.cmd(cmdClrb, al); else out.cmd(cmdMovb, bl, al); break;
                     case W | oAdd:     out.cmd(cmdAdd, bl, al); break;
                     case W | oSub:     out.cmd(cmdSub, bl, al); break;
                     case W | oAnd:     out.cmd(cmdBic, bl, al); break; //!!! AND нет
                     case W | oOr:      out.cmd(cmdBis, bl, al); break;
                     case W | oXor:     if(bl.type==atReg) out.xor_r_a(bl.reg, al); else { out.cmd(cmdMov, bl, Arg11::r4); out.xor_r_a(4, al); } break;
                     case W | oSet:
-                    case W | oSetVoid: if(bl.type == atValue && bl.value == 0) out.cmd(cmdClr, al); else out.cmd(cmdMov, bl, al); break;
+                    case W | oSetVoid: if(bl.type == atValue && bl.value == 0 && bl.str.empty()) out.cmd(cmdClr, al); else out.cmd(cmdMov, bl, al); break;
                     case D | oAdd:     out.cmd(cmdAdd, bl, al); out.cmd(cmdAdc, ah); out.cmd(cmdAdd, bh, ah); break;
                     case D | oSub:     out.cmd(cmdSub, bl, al); out.cmd(cmdSbc, ah); out.cmd(cmdSub, bh, ah); break;
                     case D | oAnd:     out.cmd(cmdBic, bl, al); out.cmd(cmdBic, bl, al); break; //!!! AND нет
@@ -620,8 +623,8 @@ void CompilerPdp11::compileVar(Node* n, unsigned d, IfOpt* ifOpt)
                                        if(ah.type==atReg) out.xor_r_a(ah.reg, bh); else { out.cmd(cmdMov, ah, Arg11::r4); out.xor_r_a(4, bh); }
                                        break;
                     case D | oSet:
-                    case D | oSetVoid: if(bl.type == atValue && bl.value == 0) out.cmd(cmdClr, al); else out.cmd(cmdMov, bl, al);
-                                       if(bh.type == atValue && bh.value == 0) out.cmd(cmdClr, ah); else out.cmd(cmdMov, bh, ah);
+                    case D | oSetVoid: if(bl.type == atValue && bl.value == 0 && bl.str.empty()) out.cmd(cmdClr, al); else out.cmd(cmdMov, bl, al);
+                                       if(bh.type == atValue && bh.value == 0 && bh.str.empty()) out.cmd(cmdClr, ah); else out.cmd(cmdMov, bh, ah);
                                        break;
                 }
 
@@ -697,8 +700,7 @@ void CompilerPdp11::compileVar(Node* n, unsigned d, IfOpt* ifOpt)
 
         case ntIf:
         {
-            NodeIf* r = (NodeIf*)n;
-
+            NodeIf* r = n->cast<NodeIf>();
             unsigned falseLabel = tree.intLabels++;
             compileJump(r->cond, 0, false, falseLabel);
             compileBlock(r->t);
@@ -709,7 +711,7 @@ void CompilerPdp11::compileVar(Node* n, unsigned d, IfOpt* ifOpt)
             else
             {
                 unsigned exitLabel = tree.intLabels++;
-                out.cmd(cmdBr,exitLabel);
+                out.cmd(cmdBr, exitLabel);
                 out.addLocalLabel(falseLabel);
                 compileBlock(r->f);
                 out.addLocalLabel(exitLabel);
@@ -738,11 +740,13 @@ void CompilerPdp11::compileFunction(Function* f)
 
     out.c.lstWriter.remark(out.c.out.writePtr, 1, f->name);
 
-    compiler.labels[ucase(f->name)] = compiler.out.writePtr;
+    compiler.addLabel(f->name);
 
     curFn = f;
     out.resetLocalLabels();
     if(f->stackSize) out.cmd(cmdSub, Arg11(atValue, 0, f->stackSize), Arg11::sp); //! Использовать PUSH
+    tree.prepare_arg = f->stackSize;
+    tree.prepare(f->rootNode);
     compileBlock(f->rootNode);
     out.processLocalLabels();
     curFn = 0;
@@ -753,10 +757,26 @@ void CompilerPdp11::compileFunction(Function* f)
 
 void CompilerPdp11::start(unsigned step)
 {
+    inStack = 0;
     if(step == 0)
     {
+        compiler.out.align2();
+
         for(std::list<C::Function>::iterator i=tree.functions.begin(); i!=tree.functions.end(); i++) // МОжно начинать не с начала
             compileFunction(&*i);
+
+        writePtrs.push(this->out.c.out.writePtr);
+
+        for(std::list<C::GlobalVar>::iterator i=tree.globalVars.begin(); i!=tree.globalVars.end(); i++) // МОжно начинать не с начала
+        {
+            if(!i->compiled)
+            {
+                i->compiled = true;
+                compiler.addLabel(i->name);
+                if(i->data.size()>0) compiler.out.write(&i->data[0], i->data.size());
+            }
+        }
+
         writePtrs.push(this->out.c.out.writePtr);
     }
     else
@@ -766,6 +786,10 @@ void CompilerPdp11::start(unsigned step)
         writePtrs.pop();
 
         compiler.disassembly(s,e);
+
+        if(writePtrs.empty()) throw std::runtime_error("CompilerPdp11.compile");
+        compiler.out.writePtr = writePtrs.front();
+        writePtrs.pop();
     }
 }
 

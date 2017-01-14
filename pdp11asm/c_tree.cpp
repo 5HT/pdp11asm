@@ -1,6 +1,7 @@
 // PDP11 Assembler (c) 08-01-2017 ALeksey Morozov (aleksey.f.morozov@gmail.com)
 
 #include "c_tree.h"
+#include <string.h>
 
 namespace C
 {
@@ -44,20 +45,43 @@ unsigned Type::sizeAsPtr() {
 //---------------------------------------------------------------------------------------------------------------------
 // Поместить в стек строку
 
-std::string Tree::regString(const char* str)
+std::string Tree::regString(const std::string& str) //! Переписать на массив
 {
-    char buf[256];
+    // Строка уже добавлена?
     std::map<std::string, int>::iterator i = strs.find(str);
     if(i != strs.end())
     {
-        snprintf(buf, sizeof(buf), "str%u", i->second);
+        // Возвращаем её имя
+        char name[16];
+        snprintf(name, sizeof(name), "$%u", i->second);
+        return name;
+    }
+
+    // Индекс
+    char name[16];
+    snprintf(name, sizeof(name), "$%u", strsCounter);
+    strs[str] = strsCounter++;
+
+    // Строка - это глобальная переменная
+    globalVars.push_back(GlobalVar());
+    GlobalVar& g = globalVars.back();
+    g.name          = name;
+    g.type.baseType = cbtChar;
+    g.type.addr     = 1;
+    g.type.arr      = 1;
+    size_t s1 = str.size()+1;
+    if(s1==1)
+    {
+        g.data.push_back(0);
     }
     else
     {
-        snprintf(buf, sizeof(buf), "str%u", strsCounter);
-        strs[str] = strsCounter++;
+        g.data.resize(s1);
+        memcpy(&g.data[0], str.c_str(), s1);
+        g.z = true;
     }
-    return buf;
+
+    return name;
 }
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -152,5 +176,65 @@ Operator Tree::inverseOp(Operator o)
 }
 
 //---------------------------------------------------------------------------------------------------------------------
+
+void Tree::prepare(Node* n)
+{
+    for(;n; n=n->next)
+    {
+        switch(n->nodeType)
+        {
+            case ntConstI:
+            case ntConstS:
+            {
+                NodeConst* c = n->cast<NodeConst>();
+                if(c->prepare)
+                {
+                    c->value += prepare_arg;
+                    c->prepare = false;
+                }
+                break;
+            }
+            case ntConvert:
+                prepare(n->cast<NodeConvert>()->var);
+                break;
+            case ntCall:
+            {
+                NodeCall* c = n->cast<NodeCall>();
+                for(unsigned i=0; i<c->args.size(); i++)
+                    prepare(c->args[i]);
+                break;
+            }
+            case ntDeaddr:
+                prepare(n->cast<NodeDeaddr>()->var);
+                break;
+            case ntSwitch:
+                prepare(n->cast<NodeSwitch>()->var);
+                break;
+            case ntReturn:
+                prepare(n->cast<NodeReturn>()->var);
+                break;
+            case ntMonoOperator:
+                prepare(n->cast<NodeMonoOperator>()->a);
+                break;
+            case ntOperator:
+                prepare(n->cast<NodeOperator>()->a);
+                prepare(n->cast<NodeOperator>()->b);
+                break;
+            case ntOperatorIf:
+                prepare(n->cast<NodeOperatorIf>()->a);
+                prepare(n->cast<NodeOperatorIf>()->b);
+                prepare(n->cast<NodeOperatorIf>()->cond);
+                break;
+            case ntJmp:
+                prepare(n->cast<NodeJmp>()->cond);
+                break;
+            case ntIf:
+                prepare(n->cast<NodeIf>()->cond);
+                prepare(n->cast<NodeIf>()->t);
+                prepare(n->cast<NodeIf>()->f);
+                break;
+        }
+    }
+}
 
 }

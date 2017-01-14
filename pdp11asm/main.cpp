@@ -14,9 +14,9 @@ int main(int argc, char** argv) {
         Compiler c;
 
         // DEBUG
-//        c.compileFile("../Test4/test.asm");
-//        std::cout << "Done" << std::endl;
-//        return 0;
+        c.compileFile("../Test4/test.asm");
+        std::cout << "Done" << std::endl;
+        return 0;
 
         // Ожидается один аргумент
         if(argc != 2) {

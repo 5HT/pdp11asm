@@ -2,55 +2,31 @@
 entry:
     MOV #1000h, SP
     BR MAIN
+
+puttext:
+    MOV 2(SP), R1
+    CLR R2
+    EMT 20
+    MOV 4(SP), R1
+    CLR R2
+    EMT 20
+    RET
 {
 
-void test(int b)
+void puttext(const char* text, const char* text2);
+
+void puttext2(const char* text, const char* text2)
 {
-    int a = b;
+    const char* text3 = text;
+    const char* text4 = text2;
+    puttext(text4, text3);
 }
 
 void main() 
 {
-    int16_t o = 1;
-    o = o-o;
-    uint16_t* a;
-    test(1);
-    for(;;)
-    {
-        a = (uint16_t*)0x4000;
-	do
-        {
-	    uint16_t x = 0;
-	    do {
-        	*a ^= 0xAAAA;
-        	a++;
-		x++;
-	    } while(x < 32);
-	    do {
-        	*a ^= 0x5555;
-        	a++;
-		x++;
-	    } while(x < 64);
-	} 
-	while(a < (uint16_t*)0x8000);
-
-        a = (uint16_t*)0x8000;
-	do
-        {
-	    uint16_t x = 0;
-	    do {
-        	a--;
-        	*a ^= 0xAAAA;
-		x++;
-	    } while(x < 32);
-	    do {
-        	a--;
-        	*a ^= 0x5555;
-		x++;
-	    } while(x < 64);
-	} 
-	while(a > (uint16_t*)0x4000);
-    }
+    const char* a = " world";
+    const char* b = "Hello";
+    puttext2(a, b);
 }
 
 }

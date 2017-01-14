@@ -320,7 +320,7 @@ void Parser::nextToken2() {
 
 //-----------------------------------------------------------------------------
 
-void Parser::syntaxError(const char* text) {    
+void Parser::syntaxError(const char* text) {
   throw std::runtime_error((fileName + "(" + i2s(prevLine) + "," + i2s(prevCol) + "): " + (text ? text : "Syntax error")).c_str());
 }
 
