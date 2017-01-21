@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <list>
+#include "parser.h"
 
 namespace C
 {
@@ -23,9 +24,10 @@ namespace C
         int addr, arr, arr2, arr3;
         Struct* s;
 
-        bool operator == (Type a) const
+        bool eq(const Type& a) const
         {
-            return baseType==a.baseType && addr==a.addr && s==a.s && arr==a.arr && arr2==a.arr2 && arr3==a.arr3;
+            if(baseType==cbtStruct && s != a.s) return false;
+            return baseType==a.baseType && addr==a.addr;
         }
 
         inline Type(BaseType _baseType = cbtError) { arr=arr2=arr3=addr=0; s=0; baseType=_baseType; }
@@ -103,12 +105,23 @@ namespace C
         Reg isRegVar();
     };
 
+    class NodeLabel : public Node {
+    public:
+        unsigned n1;
+        NodeLabel()
+        {
+            nodeType = ntLabel;
+            n1 = 0;
+        }
+        ~NodeLabel();
+    };
+
     class NodeSwitch : public Node {
     public:
         NodeVar* var;
         Node* body;
-        Node* defaultLabel;
-        std::map<unsigned int, Node*> cases;
+        NodeLabel* defaultLabel;
+        std::map<unsigned int, NodeLabel*> cases;
 
         NodeSwitch(NodeVar* _var)
         {
@@ -118,16 +131,19 @@ namespace C
             defaultLabel = 0;
         }
 
-      void setDefault(Node* label)
-      {
-          defaultLabel = label;
-      }
+        bool setDefault(NodeLabel* label)
+        {
+            if(defaultLabel) return false;
+            defaultLabel = label;
+            return true;
+        }
 
-      void addCase(int value, Node* label)
-      {
-          if(cases.find(value) != cases.end()) throw std::runtime_error("NodeSwitch.addCase");
-          cases[value] = label;
-      }
+        bool addCase(int value, NodeLabel* label)
+        {
+            if(cases.find(value) != cases.end()) return false;
+            cases[value] = label;
+            return true;
+        }
     };
 
     class NodeConvert : public NodeVar {
@@ -173,8 +189,8 @@ namespace C
 
     class NodeConst : public NodeVar {
     public:
-        int32_t value;
-        bool    prepare;
+        uint32_t    value;
+        bool        prepare;
         std::string text;
 
         NodeConst(const std::string& _text, Type _dataType) {
@@ -185,7 +201,7 @@ namespace C
             prepare  = false;
         }
 
-        NodeConst(int32_t _value, Type _dataType = cbtUShort)
+        NodeConst(uint32_t _value, Type _dataType)
         {
             nodeType = ntConstI;
             dataType = _dataType;
@@ -196,14 +212,38 @@ namespace C
         bool isNull() { return value==0 && text.empty(); }
     };
 
+    class FunctionArg {
+    public:
+        Type              type;
+        unsigned          reg;
+
+        FunctionArg(Type _type, unsigned _reg) : type(_type), reg(_reg) {};
+    };
+
+    struct Function {
+        Type                     retType;
+        std::string              name;
+        std::vector<FunctionArg> args;
+        std::string              needInclude;
+        int                      addr;
+        unsigned                 stackSize;
+        Node*                    rootNode;
+        bool                     compiled;
+        unsigned                 labelsCnt;
+
+        Function() { compiled=false; rootNode=0; addr=0; stackSize=0; labelsCnt=0; }
+        ~Function() { delete rootNode; }
+    };
+
     class NodeCall : public NodeVar {
     public:
-        std::vector<NodeVar*> args;
+        std::vector<NodeVar*> args1;
+        Function* f;
         int addr;
         std::string name;
 
-        NodeCall(int _addr, const std::string& _name, Type _dataType) { nodeType = ntCall; addr = _addr; name = _name; dataType = _dataType; }
-        ~NodeCall() { while(!args.empty()) { delete args.back(); args.pop_back(); } }
+        NodeCall(int _addr, const std::string& _name, Type _dataType, Function* _f) { nodeType = ntCall; addr = _addr; name = _name; dataType = _dataType; f = _f; }
+        ~NodeCall() { while(!args1.empty()) { delete args1.back(); args1.pop_back(); } }
     };
 
     class NodeMonoOperator : public NodeVar {
@@ -235,16 +275,6 @@ namespace C
         ~NodeOperatorIf() { delete a; delete b; delete cond; }
     };
 
-    class NodeLabel : public Node {
-    public:
-        unsigned n;
-        NodeLabel(unsigned& intLabels)
-        {
-            nodeType = ntLabel;
-            n = intLabels++;
-        }
-        ~NodeLabel();
-    };
 
     class NodeDeaddr : public NodeVar {
     public:
@@ -282,26 +312,8 @@ namespace C
         NodeVar* cond;
         bool  ifZero;
 
-        NodeJmp() {
-            nodeType = ntJmp;
-            label = 0;
-            cond = 0;
-            ifZero = false;
-        }
-    };
-
-    struct Function {
-        Type              retType;
-        std::string       name;
-        std::vector<Type> args;
-        std::string       needInclude;
-        int               addr;
-        unsigned          stackSize;
-        Node*             rootNode;
-        bool              compiled;
-
-        Function() { compiled=false; rootNode=0; addr=0; stackSize=0; }
-        ~Function() { delete rootNode; }
+        NodeJmp(NodeLabel* _label, NodeVar* _cond=0, bool _ifZero=false) { nodeType=ntJmp; label=_label; cond=_cond; ifZero=_ifZero; }
+        ~NodeJmp() { delete cond; }
     };
 
     struct Typedef {
@@ -317,8 +329,9 @@ namespace C
         std::vector<uint8_t> data;
         bool                 compiled;
         bool                 z;
+        bool                 reg;
 
-        GlobalVar() { extren1=false; z=false; compiled=false; }
+        GlobalVar() { extren1=false; z=false; compiled=false; reg=false; }
     };
 
     class Tree
@@ -332,7 +345,7 @@ namespace C
         std::list<Struct>    structs;
 
         unsigned                   userStructCnt;
-        unsigned                   intLabels;
+        //unsigned                   labelsCnt;
         int                        strsCounter;
         std::map<std::string, int> strs;
 
@@ -340,21 +353,32 @@ namespace C
         {
             userStructCnt = 0;
             strsCounter = 1;
-            intLabels = 0;
         }
 
         std::string regString(const std::string& str);
         Function* findFunction(const std::string& name);
         bool checkUnique(const std::string& name) { return unique.find(name) == unique.end(); }
         static Node* postIncOpt(Node* v);
-        static void linkNode(Node*& first, Node*& last, Node* element);
         static Operator inverseOp(Operator o);
 
         Function*  addFunction (const char* name) { functions.push_back(Function()); Function* f=&functions.back(); f->name=name; unique[name]=1; return f; }
         GlobalVar* addGlobalVar(const char* name) { globalVars.push_back(GlobalVar()); GlobalVar* v=&globalVars.back(); v->name=name; unique[name]=2; return v; }
         Typedef*   addTypedef  (const char* name, const Type& type) { typedefs.push_back(Typedef()); Typedef* t=&typedefs.back(); t->name=name; t->type=type; unique[name]=3; return t; }
 
-        unsigned prepare_arg;
-        void prepare(Node* n);
+        static Node*    allocIf(NodeVar* cond, Node* t, Node* f);
+        static NodeVar* allocOperatorIf(NodeVar* cond, NodeVar* t, NodeVar* f);
+        static NodeJmp* allocJmp(NodeLabel* label, NodeVar* cond=0, bool ifFalse=false);
     };
+
+    class Block {
+    public:
+        Node* first;
+        Node* last;
+
+        Block();
+        void operator << (Node* element);
+    };
+
+    void treePrepare(Function* f);
 }
+

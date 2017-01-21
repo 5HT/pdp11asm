@@ -13,7 +13,7 @@ namespace C
 
 //---------------------------------------------------------------------------------------------------------------------
 
-Parser::StackVar* Parser::p_ifToken(std::vector<StackVar>& a)
+Parser::StackVar* Parser::ifToken(std::vector<StackVar>& a)
 {
     for(std::vector<StackVar>::iterator i=a.begin(); i!=a.end(); i++)
         if(p.ifToken(i->name.c_str()))
@@ -23,7 +23,7 @@ Parser::StackVar* Parser::p_ifToken(std::vector<StackVar>& a)
 
 //---------------------------------------------------------------------------------------------------------------------
 
-Function* Parser::p_ifToken(std::list<Function>& a)
+Function* Parser::ifToken(std::list<Function>& a)
 {
     for(std::list<Function>::iterator f = a.begin(); f!=a.end(); f++)
         if(p.ifToken(f->name.c_str()))
@@ -33,7 +33,7 @@ Function* Parser::p_ifToken(std::list<Function>& a)
 
 //---------------------------------------------------------------------------------------------------------------------
 
-GlobalVar* Parser::p_ifToken(std::list<GlobalVar>& a)
+GlobalVar* Parser::ifToken(std::list<GlobalVar>& a)
 {
     std::list<GlobalVar>::iterator f = a.begin();
     for(; f!=a.end(); f++)
@@ -47,7 +47,7 @@ GlobalVar* Parser::p_ifToken(std::list<GlobalVar>& a)
 bool Parser::checkStackUnique(const char* str) //! Заменить это потом на более оптимальное
 {
     for(std::vector<StackVar>::iterator i=stackVars.begin(); i!=stackVars.end(); i++)
-        if(0==strcmp(i->name.c_str(), str))
+        if(i->name == str)
             return false;
     return true;
 }
@@ -61,46 +61,17 @@ NodeVar* Parser::getStackVar(StackVar& x)
     NodeConst* c = outOfMemory(new NodeConst(x.addr, t)); // curFn->name+"_"+x.name
     if(x.arg) c->prepare = true;
     NodeVar* r = outOfMemory(new NodeOperator(c->dataType, oAdd, c, outOfMemory(new NodeSP)));
-    if(!t.arr) r = outOfMemory(new NodeDeaddr(r));
+    if(!t.arr)
+    {
+        if(r->dataType.addr==0) p.syntaxError("getStackVar NodeDeaddr");
+        r = outOfMemory(new NodeDeaddr(r));
+    }
     return r;
 }
 
 //---------------------------------------------------------------------------------------------------------------------
 
-NodeJmp* Parser::allocJmp(NodeLabel* _label, NodeVar* _cond, bool _ifZero)
-{
-    // Константа в условии
-    if(_cond->nodeType == ntConstI)
-    {
-        NodeConst* nc = _cond->cast<NodeConst>();
-        bool check = nc->value != 0;
-        if(_ifZero) check = !check;
-        delete _cond;
-        _cond = 0;
-        if(!check) return 0;
-    }
-
-    NodeJmp* j = new NodeJmp;
-    outOfMemory(j);
-    j->cond   = _cond;
-    j->label  = _label;
-    j->ifZero = _ifZero;
-    return j;
-}
-
-//---------------------------------------------------------------------------------------------------------------------
-
-NodeJmp* Parser::allocJmp(NodeLabel* _label)
-{
-    NodeJmp* j = new NodeJmp;
-    outOfMemory(j);
-    j->label  = _label;
-    return j;
-}
-
-//---------------------------------------------------------------------------------------------------------------------
-
-NodeVar* Parser::nodeConvert(NodeVar* x, Type type)
+NodeVar* Parser::nodeConvert(NodeVar* x, Type type, bool auto_convert)
 {
     // Преобразовывать не надо
     if(type.baseType == x->dataType.baseType && type.addr == x->dataType.addr) return x;
@@ -110,7 +81,7 @@ NodeVar* Parser::nodeConvert(NodeVar* x, Type type)
     {
         if(x->nodeType==ntConstI)
         {
-            if(type.is8()) x->cast<NodeConst>()->value &= 0xFF; else
+            if(type.is8()) x->cast<NodeConst>()->value &= 0xFF; else //! Предупреждение о переполнении
             if(type.is16()) x->cast<NodeConst>()->value &= 0xFFFF;
         }
         x->dataType = type;
@@ -118,7 +89,7 @@ NodeVar* Parser::nodeConvert(NodeVar* x, Type type)
     }
 
     // 8 битные арифметические операции
-    if(x->nodeType==ntOperator && type.is8())
+/*    if(x->nodeType==ntOperator && type.is8())
     {
         NodeOperator* no = x->cast<NodeOperator>();
         if((no->a->nodeType==ntConvert || no->a->isConst()) && (no->b->nodeType==ntConvert || no->b->isConst()))
@@ -132,7 +103,7 @@ NodeVar* Parser::nodeConvert(NodeVar* x, Type type)
                 return no;
             }
         }
-    }
+    }*/
 
     // Преобразовывать надо
     return new NodeConvert(x, type);
@@ -142,8 +113,8 @@ NodeVar* Parser::nodeConvert(NodeVar* x, Type type)
 
 NodeVar* Parser::bindVar_2()
 {
-    // Чтение возможных значений
-    if(p.ifToken(ttString2)) { //! Не обрабатываются строки с \x00 !!!
+    if(p.ifToken(ttString2)) //! Не обрабатываются строки с \x00 !!!
+    {
         std::string buf;
         buf += p.loadedText;
         while(p.ifToken(ttString2))
@@ -151,13 +122,13 @@ NodeVar* Parser::bindVar_2()
         Type type;
         type.addr = 1;
         type.baseType = cbtChar;
-        return new NodeConst(world.regString(buf.c_str()), type);
-    }
+        return outOfMemory(new NodeConst(world.regString(buf.c_str()), type));
+    }    
     if(p.ifToken(ttString1)) {
-        return new NodeConst((unsigned char)p.loadedText[0], cbtChar);
+        return outOfMemory(new NodeConst((unsigned char)p.loadedText[0], cbtChar));
     }
-    if(p.ifToken(ttInteger)) {
-        return new NodeConst(p.loadedNum, cbtLong); //! Должен быть неопределенный размер
+    if(p.ifToken(ttInteger)) {        
+        return outOfMemory(new NodeConst(p.loadedNum, p.loadedNum < 256 ? cbtUChar : p.loadedNum < 65536 ? cbtUShort : cbtULong)); //! Определить ти переменной
     }
     if(p.ifToken("sizeof")) {
         p.needToken("(");
@@ -179,7 +150,7 @@ NodeVar* Parser::bindVar_2()
         if(type.baseType != cbtError) {
             readModifiers(type);
             p.needToken(")");
-            return nodeConvert(bindVar(), type);
+            return nodeConvert(bindVar(), type, false);
         }
         NodeVar* a = readVar(-1);
         p.needToken(")");
@@ -187,11 +158,11 @@ NodeVar* Parser::bindVar_2()
     }
 
     // Стековая переменная
-    StackVar* s = p_ifToken(stackVars);
+    StackVar* s = ifToken(stackVars);
     if(s) return getStackVar(*s);
 
     // Глобальная переменная
-    GlobalVar* g = p_ifToken(world.globalVars);
+    GlobalVar* g = ifToken(world.globalVars);
     if(g)
     {
         NodeConst* c = new NodeConst(g->name, g->type);
@@ -202,18 +173,21 @@ NodeVar* Parser::bindVar_2()
 
     // Это функция
     Function* f;
-    if((f = p_ifToken(world.functions)) != 0)
+    if((f = ifToken(world.functions)) != 0)
     {
         p.needToken("(");
 
         // Чтение аргументов
-        NodeCall* c =  new NodeCall(f->addr, f->name, f->retType);
+        NodeCall* c =  new NodeCall(f->addr, f->name, f->retType, f);
         outOfMemory(c);
         std::vector<NodeVar*> args;
-        for(unsigned int j=0; j<f->args.size(); j++) {
-            if(j>0) p.needToken(",");
-            c->args.push_back(nodeConvert(readVar(), f->args[j]));
+        bool fi = true;
+        for(std::vector<FunctionArg>::iterator jj=f->args.begin(); jj!=f->args.end(); jj++) {
+            if(p.ifToken(")")) p.syntaxError("Функция требует больше параметров");
+            if(fi) fi=false; else p.needToken(",");
+            c->args1.push_back(nodeConvert(readVar(), jj->type, true));
         }
+        if(p.ifToken(",")) p.syntaxError("Функция требует меньше параметров");
         p.needToken(")");
 
         return c;
@@ -221,30 +195,6 @@ NodeVar* Parser::bindVar_2()
 
     p.syntaxError();
     return 0;
-}
-
-//---------------------------------------------------------------------------------------------------------------------
-
-NodeVar* Parser::nodeOperatorIf(Type type, NodeVar* a, NodeVar* b, NodeVar* cond)
-{
-    //! ntConstS
-    if(cond->nodeType == ntConstI)
-    {
-        if(cond->cast<NodeConst>()->value)
-        {
-            delete cond;
-            delete b;
-            return a;
-        }
-        else
-        {
-            delete cond;
-            delete a;
-            return b;
-        }
-    }
-
-    return outOfMemory(new NodeOperatorIf(type, a, b, cond));
 }
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -268,8 +218,8 @@ NodeVar* Parser::nodeOperator2(Type type, Operator o, NodeVar* a, NodeVar* b)
             case oAnd: ac = (ac &  bc); break;
             case oOr:  ac = (ac |  bc); break;
             case oXor: ac = (ac ^  bc); break;
-            case oMul: ac = (ac *  bc); break;
-            case oDiv: ac = (ac /  bc); break;
+            case oMul: if(type.isSigned()) ac = int32_t(ac) *  int32_t(bc); else ac = (ac *  bc); break;
+            case oDiv: if(type.isSigned()) ac = int32_t(ac) /  int32_t(bc); else ac = (ac /  bc); break;
             case oShr: ac = (ac >> bc); break;
             case oShl: ac = (ac << bc); break;
             case oNE:  ac = (ac != bc ? 1 : 0); break;
@@ -306,52 +256,40 @@ NodeVar* Parser::nodeOperator2(Type type, Operator o, NodeVar* a, NodeVar* b)
 
 NodeVar* Parser::nodeOperator(Operator o, NodeVar* a, NodeVar* b, bool noMul, NodeVar* cond)
 {
-    // Временное решение. Заменяем операторы += на простые операторы.
-    switch((unsigned)o)  //! Убрать
-    {
-        case oSAdd: return nodeOperator(oSet, a, nodeConvert(nodeOperator(oAdd, a, b, noMul, 0), a->dataType), noMul, 0);
-        case oSSub: return nodeOperator(oSet, a, nodeConvert(nodeOperator(oSub, a, b, noMul, 0), a->dataType), noMul, 0);
-        case oSMul: return nodeOperator(oSet, a, nodeConvert(nodeOperator(oMul, a, b, noMul, 0), a->dataType), noMul, 0);
-        case oSDiv: return nodeOperator(oSet, a, nodeConvert(nodeOperator(oDiv, a, b, noMul, 0), a->dataType), noMul, 0);
-        case oSMod: return nodeOperator(oSet, a, nodeConvert(nodeOperator(oMod, a, b, noMul, 0), a->dataType), noMul, 0);
-        case oSShl: return nodeOperator(oSet, a, nodeConvert(nodeOperator(oShl, a, b, noMul, 0), a->dataType), noMul, 0);
-        case oSShr: return nodeOperator(oSet, a, nodeConvert(nodeOperator(oShr, a, b, noMul, 0), a->dataType), noMul, 0);
-        case oSAnd: return nodeOperator(oSet, a, nodeConvert(nodeOperator(oAnd, a, b, noMul, 0), a->dataType), noMul, 0);
-        case oSXor: return nodeOperator(oSet, a, nodeConvert(nodeOperator(oXor, a, b, noMul, 0), a->dataType), noMul, 0);
-        case oSOr:  return nodeOperator(oSet, a, nodeConvert(nodeOperator(oOr,  a, b, noMul, 0), a->dataType), noMul, 0);
-    }
-
     // Этим операторам типы не важны
     if(o==oLAnd || o==oLOr) return nodeOperator2(cbtShort, o, a, b);
 
     // Сложение указателя и числа
     if(o==oAdd && a->dataType.addr!=0 && b->dataType.addr==0 && b->dataType.is8_16()) //! void*
     {
-        if(!noMul) { unsigned s = a->dataType.sizeElement(); if(s != 1) b = nodeOperator(oMul, b, new NodeConst(s)); }
+        b = nodeConvert(b, cbtUShort, true);
+        if(!noMul) { unsigned s = a->dataType.sizeElement(); if(s != 1) b = nodeOperator(oMul, b, new NodeConst(s, cbtUShort)); }
         return nodeOperator2(a->dataType, o, a, b);
     }
 
     // Сложение числа и указателя
     if(o==oAdd && a->dataType.addr==0 && a->dataType.is8_16() && b->dataType.addr!=0) //! void*
     {
-        if(!noMul) { unsigned s = b->dataType.sizeElement(); if(s != 1) a = nodeOperator(oMul, a, new NodeConst(s)); }
+        a = nodeConvert(a, cbtUShort, true);
+        if(!noMul) { unsigned s = b->dataType.sizeElement(); if(s != 1) a = nodeOperator(oMul, a, new NodeConst(s, cbtUShort)); }
         return nodeOperator2(b->dataType, o, a, b);
     }
 
     // Вычитание числа из указателя
     if(o==oSub && a->dataType.addr!=0 && b->dataType.addr==0 && b->dataType.is8_16()) //! void*
     {
-        if(!noMul) { unsigned s = a->dataType.sizeElement(); if(s != 1) b = nodeOperator(oMul, b, new NodeConst(s)); }
+        b = nodeConvert(b, cbtUShort, true);
+        if(!noMul) { unsigned s = a->dataType.sizeElement(); if(s != 1) b = nodeOperator(oMul, b, new NodeConst(s, cbtUShort)); }
         return nodeOperator2(a->dataType, o, a, b);
     }
 
     // Операция между указателем и нулем
     if(a->dataType.addr!=0 && b->dataType.addr==0 && b->nodeType==ntConstI && b->cast<NodeConst>()->isNull())
-        b = nodeConvert(b, a->dataType);
+        b = nodeConvert(b, a->dataType, false);
 
     // Операция между нулем и указателем
     if(b->dataType.addr!=0 && a->dataType.addr==0 && a->nodeType==ntConstI && a->cast<NodeConst>()->isNull())
-        a = nodeConvert(a, b->dataType);
+        a = nodeConvert(a, b->dataType, false);
 
     // Вычитание указателя из указателя. И типы указателей идентичны
     if(o==oSub && a->dataType.addr!=0 && a->dataType.addr==b->dataType.addr && a->dataType.baseType==b->dataType.baseType)
@@ -360,7 +298,7 @@ NodeVar* Parser::nodeOperator(Operator o, NodeVar* a, NodeVar* b, bool noMul, No
         if(s != 0) // Это void*
         {
             NodeVar* n = nodeOperator2(cbtUShort, o, a, b);
-            if(!noMul) if(s != 1) n = nodeOperator(oDiv, n, new NodeConst(s));
+            if(!noMul) if(s != 1) n = nodeOperator(oDiv, n, new NodeConst(s, cbtUShort));
             return n;
         }
     }
@@ -374,52 +312,53 @@ NodeVar* Parser::nodeOperator(Operator o, NodeVar* a, NodeVar* b, bool noMul, No
     {
         Type type = a->dataType;
         if(a->dataType.addr!=b->dataType.addr || a->dataType.baseType!=b->dataType.baseType) type.baseType=cbtVoid, type.addr=1;
-        return nodeOperatorIf(type, a, b, cond);
+        return world.allocOperatorIf(cond, nodeConvert(a, type, true), nodeConvert(b, type, true));
     }        
 
-    // Приводим к типу переменной в которую записываем
-    if(o==oSet || o==oSetVoid) return nodeOperator2(a->dataType, o, a, nodeConvert(b, a->dataType));
+    // При записи всё просто. Приводим к типу приёмника.        
+    if(o==oSet || o==oSetVoid || o==oSAdd || o==oSSub || o==oSMul || o==oSDiv
+    || o==oSMod || o==oSShl || o==oSShr || o==oSAnd || o==oSXor || o==oSOr)
+        return nodeOperator2(a->dataType, o, a, nodeConvert(b, a->dataType, true));
 
-
-    // Далее указатели недопустимы
-    Type at = a->dataType, bt = b->dataType;
-    if(at.addr != 0 || bt.addr != 0) p.syntaxError("Такая операция между указателями невозможна");
-
-    // Число приводится к типу второго аргумента
-    if(a->nodeType == ntConstI && b->nodeType != ntConstI) at = b->dataType; else
-    if(b->nodeType == ntConstI && a->nodeType != ntConstI) bt = a->dataType;
-
-    // Преобразование меньшего к большему
-    bool sig = at.isSigned();
-    bool is16 = at.is16() || bt.is16();
-    bool is32 = at.is32() || bt.is32();
-    Type dataType = is32 ? (sig ? cbtLong : cbtULong) : is16 ? (sig ? cbtShort : cbtUShort) : (sig ? cbtChar : cbtUChar);
-
+    // Результирующий тип
+    unsigned r = 1;
+    bool sig = false;
+    operatorType(r, sig, a->dataType);
+    operatorType(r, sig, b->dataType);
     // Арифметические операции между 8 битными числами дают 16 битный результат
-    if(dataType.is8()) {
-        switch((unsigned)o) {
-            case oAdd:
-            case oSub:
-            case oDiv:
-            case oMod:
-            case oMul:
-                dataType = dataType.isSigned() ? cbtShort : cbtUShort;
-        }
+    if(r==1 && (o==oAdd || o==oSub || o==oDiv || o==oMod || o==oMul)) r=2;
+    Type resultType = r>=4 ? (sig ? cbtLong : cbtULong) : r>=2 ? (sig ? cbtShort : cbtUShort) : (r>=1 ? cbtChar : cbtUChar);
+
+
+    // Условный оператор
+    if(o==oIf) return world.allocOperatorIf(cond, nodeConvert(a, resultType, true), nodeConvert(b, resultType, true));
+    return nodeOperator2(resultType, o, nodeConvert(a, resultType, true), nodeConvert(b, resultType, true));
+}
+
+//---------------------------------------------------------------------------------------------------------------------
+
+void Parser::operatorType(unsigned& r, bool& sig, Type& a)
+{
+    if(a.addr) p.syntaxError("Такая операция между указателями невозможна");
+    switch(a.baseType)
+    {
+        case cbtVoid:   p.syntaxError("Операции с типом void недопустимы");
+        case cbtChar:   r |= 1; sig = true; break;
+        case cbtUChar:  r |= 1; break;
+        case cbtShort:  r |= 2; sig = true; break;
+        case cbtUShort: r |= 2; break;
+        case cbtLong:   r |= 4; sig = true; break;
+        case cbtULong:  r |= 4; break;
+        default: p.syntaxError("Такая операция между этими типами невозможна");
     }
-
-    a = nodeConvert(a, dataType);
-    b = nodeConvert(b, dataType);
-    if(o==oIf) return nodeOperatorIf(dataType, a, b, cond);
-
-    return nodeOperator2(dataType, o, a, b);
 }
 
 //---------------------------------------------------------------------------------------------------------------------
 
 NodeVar* Parser::nodeAddr(NodeVar* x)
 {
-    if(x->nodeType != ntDeaddr) p.syntaxError("addrNode");
-    NodeDeaddr* a = ((NodeDeaddr*)x);
+    if(x->nodeType != ntDeaddr) p.syntaxError("nodeAddr");
+    NodeDeaddr* a = x->cast<NodeDeaddr>();
     NodeVar* result = a->var;
     a->var = 0;
     delete a;
@@ -507,17 +446,17 @@ xx:         if(a->dataType.baseType!=cbtStruct || a->dataType.addr!=0 || a->data
                     a = nodeAddr(a);
                     if(si.offset != 0)
                     {
-                        a = nodeOperator(oAdd, a, new NodeConst(si.offset), true);
+                        a = nodeOperator(oAdd, a, new NodeConst(si.offset, cbtUShort), true);
                     }
                     if(si.type.arr)
                     {
-                        a = nodeConvert(a, si.type);
+                        a = nodeConvert(a, si.type, false);
                     }
                     else
                     {
                         Type type = si.type;
                         type.addr++;
-                        a = nodeConvert(a, type);
+                        a = nodeConvert(a, type, false);
                         a = new NodeDeaddr(a);
                     }
                     goto retry;
@@ -606,10 +545,10 @@ NodeVar* Parser::readVar(int level)
 //---------------------------------------------------------------------------------------------------------------------
 // Чтение константы и преобразование её к определенному типу
 
-uint32_t Parser::readConst(Type& to)
+uint32_t Parser::readConst(const Type& to)
 {
-    NodeVar* n = nodeConvert(readVar(-1), to);
-    if(n->nodeType != ntConstI) p.syntaxError("Ожидается константа");
+    NodeVar* n = nodeConvert(readVar(), to, true);
+    if(n->nodeType != ntConstI) p.syntaxError("Ожидается константа"); //! ntConstS то же нужно здесь
     uint32_t value = n->cast<NodeConst>()->value;
     delete n;
     return value;
@@ -620,13 +559,13 @@ uint32_t Parser::readConst(Type& to)
 
 uint16_t Parser::readConstU16()
 {
-    Type t(cbtUShort);
-    return readConst(t);
+    return readConst(cbtUShort);
 }
 
 //---------------------------------------------------------------------------------------------------------------------
 
-void Parser::readModifiers(Type& t) {
+void Parser::readModifiers(Type& t)
+{
     while(p.ifToken("*")) t.addr++;
 }
 
@@ -638,7 +577,7 @@ void Parser::parseStruct(Struct& s, int m)
     {
         Type type0;
         const char* xx[] = { "struct", "union", 0 };
-        int su;
+        unsigned su;
         if(p.ifToken(xx, su))
         {
             Struct* sii = parseStruct3(su);
@@ -739,7 +678,7 @@ Type Parser::readType(bool error)
 
     // Читаем struct или union
     const char* xx[] = { "struct", "union", 0 };
-    int su;
+    unsigned su;
     if(p.ifToken(xx,  su)) {
         int i=0;
         for(std::list<Struct>::iterator s=world.structs.begin(); s!=world.structs.end(); s++, i++) {
@@ -802,74 +741,77 @@ Node* Parser::readCommand1()
     {
         if(breakLabel == 0) p.syntaxError("break без for, do, while, switch");
         p.needToken(";");
-        return allocJmp(breakLabel);
+        return world.allocJmp(breakLabel);
     }
 
     if(p.ifToken("continue"))
     {
         if(continueLabel == 0) p.syntaxError("continue без for, do, while");
         p.needToken(";");
-        return allocJmp(continueLabel);
+        return world.allocJmp(continueLabel);
     }
 
-  if(p.ifToken("while")) {
-    // Выделяем метки
-    NodeLabel* oldBreakLabel = breakLabel; breakLabel = new NodeLabel(world.intLabels);
-    NodeLabel* oldContinueLabel = continueLabel; continueLabel = new NodeLabel(world.intLabels);
-    // Код
-    Node *first=0, *last=0;
-    p.needToken("(");
-    Tree::linkNode(first, last, continueLabel);
-    NodeVar* cond = readVar(-1);
-    p.needToken(")");
-    Node* body = readCommand();
-    if(body) {
-      Tree::linkNode(first, last, allocJmp(breakLabel, cond, true));
-      Tree::linkNode(first, last, body);
-      Tree::linkNode(first, last, allocJmp(continueLabel));
-    } else {
-      // Если тела нет, то можно обойтись без jmp
-      Tree::linkNode(first, last, allocJmp(continueLabel, cond, false));
+    if(p.ifToken("while"))
+    {
+        // Выделяем метки
+        NodeLabel* oldBreakLabel = breakLabel; breakLabel = new NodeLabel;
+        NodeLabel* oldContinueLabel = continueLabel; continueLabel = new NodeLabel;
+        // Код
+        Block b;
+        p.needToken("(");
+        b << continueLabel;
+        NodeVar* cond = readVar();
+        p.needToken(")");
+        Node* body = readCommand();
+        if(body)
+        {
+            b << world.allocJmp(breakLabel, cond, true);
+            b << body;
+            b << world.allocJmp(continueLabel);
+        }
+        else
+        {
+            // Если тела нет, то можно обойтись без jmp
+            b << world.allocJmp(continueLabel, cond, false);
+        }
+        b << breakLabel;
+        breakLabel    = oldBreakLabel;
+        continueLabel = oldContinueLabel;
+        return b.first;
     }
-    Tree::linkNode(first, last, breakLabel);
-    breakLabel    = oldBreakLabel;
-    continueLabel = oldContinueLabel;
-    return first;
-  }
 
-  if(p.ifToken("do")) {
-    NodeLabel* oldBreakLabel = breakLabel; breakLabel = new NodeLabel(world.intLabels);
-    NodeLabel* oldContinueLabel = continueLabel; continueLabel = new NodeLabel(world.intLabels);
-    Node *first=0, *last=0;
-    Tree::linkNode(first, last, continueLabel);
-    Tree::linkNode(first, last, readCommand());
-    p.needToken("while");
-    p.needToken("(");
-
-    std::string r;
-    getRemark(r); //! Попадает только первая строка!
-    NodeVar* vv = readVar(-1);
-    if(vv) vv->remark.swap(r);
-
-    Tree::linkNode(first, last, allocJmp(continueLabel, vv, false));
-    p.needToken(")");
-    breakLabel    = oldBreakLabel;
-    continueLabel = oldContinueLabel;
-    return first;
-  }
+    if(p.ifToken("do"))
+    {
+        NodeLabel* oldBreakLabel = breakLabel; breakLabel = new NodeLabel;
+        NodeLabel* oldContinueLabel = continueLabel; continueLabel = new NodeLabel;
+        Block b;
+        b << continueLabel;
+        b << readCommand();
+        p.needToken("while");
+        p.needToken("(");
+        std::string r;
+        getRemark(r); //! Попадает только первая строка!
+        NodeVar* vv = readVar(-1);
+        if(vv) vv->remark.swap(r);
+        b << world.allocJmp(continueLabel, vv, false);
+        p.needToken(")");
+        breakLabel    = oldBreakLabel;
+        continueLabel = oldContinueLabel;
+        return b.first;
+    }
 
     if(p.ifToken("for"))
     {
-        NodeLabel* oldBreakLabel = breakLabel; breakLabel = new NodeLabel(world.intLabels);
-        NodeLabel* oldContinueLabel = continueLabel; continueLabel = new NodeLabel(world.intLabels);
-        NodeLabel* startLabel = new NodeLabel(world.intLabels);
+        NodeLabel* oldBreakLabel = breakLabel; breakLabel = new NodeLabel;
+        NodeLabel* oldContinueLabel = continueLabel; continueLabel = new NodeLabel;
+        NodeLabel* startLabel = new NodeLabel;
         p.needToken("(");
-        Node *aFirst=0, *aLast=0;
+        Block a;
         if(!p.ifToken(";"))
         {
             do
             {
-                Tree::linkNode(aFirst, aLast, readVar(-1));
+                a << readVar();
             }
             while(p.ifToken(","));
             p.needToken(";");
@@ -880,12 +822,12 @@ Node* Parser::readCommand1()
             cond = readVar(-1);
             p.needToken(";");
         }
-        Node *cFirst=0, *cLast=0;
+        Block c;
         if(!p.ifToken(")"))
         {
             do
             {
-                Tree::linkNode(cFirst, cLast, readVar());
+                c << readVar();
             }
             while(p.ifToken(","));
             p.needToken(")");
@@ -893,55 +835,41 @@ Node* Parser::readCommand1()
 
         Node* cmd = readCommand();
 
-        Tree::linkNode(aFirst, aLast, startLabel);
-        if(!cFirst) Tree::linkNode(aFirst, aLast, continueLabel);
-        if(cond) Tree::linkNode(aFirst, aLast, allocJmp(breakLabel, cond, true));
-        Tree::linkNode(aFirst, aLast, cmd);
-        if(cFirst)
+        a << startLabel;
+        if(!c.first) a << continueLabel;
+        if(cond) a << world.allocJmp(breakLabel, cond, true);
+        a << cmd;
+        if(c.first)
         {
-            Tree::linkNode(aFirst, aLast, continueLabel);
-            Tree::linkNode(aFirst, aLast, cFirst);
-            Tree::linkNode(aFirst, aLast, allocJmp(startLabel));
+            a << continueLabel;
+            a << c.first;
+            a << world.allocJmp(startLabel);
         }
         else
         {
-            Tree::linkNode(aFirst, aLast, allocJmp(startLabel));
+            a << world.allocJmp(startLabel);
         }
-        Tree::linkNode(aFirst, aLast, breakLabel);
-
+        a << breakLabel;
         breakLabel    = oldBreakLabel;
         continueLabel = oldContinueLabel;
-        return aFirst;
+        return a.first;
     }
 
-  if(p.ifToken("if")) {
-    p.needToken("(");
-    NodeVar* cond = readVar();
-    p.needToken(")");
-    Node* t = readCommand();
-    Node* f = 0;
-    if(p.ifToken("else")) f = readCommand();
-
-    // Оптимизация //! Условие 1==1
-    if(cond->nodeType == ntConstI) {
-      if(cond->cast<NodeConst>()->value) {
-        delete cond;
-        delete f;
-        return t;
-      } else {
-        delete cond;
-        delete t;
-        return f;
-      }
-    }
-
-        return outOfMemory(new NodeIf(cond, t, f));
+    if(p.ifToken("if"))
+    {
+        p.needToken("(");
+        NodeVar* cond = readVar();
+        p.needToken(")");
+        Node* t = readCommand();
+        Node* f = 0;
+        if(p.ifToken("else")) f = readCommand();
+        return world.allocIf(cond, t, f);
     }
 
     if(p.ifToken("switch"))
     {
         NodeLabel* oldBreakLabel = breakLabel;
-        breakLabel = new NodeLabel(world.intLabels);
+        breakLabel = new NodeLabel;
         outOfMemory(breakLabel);
         p.needToken("(");
         NodeVar* var = readVar();
@@ -951,89 +879,96 @@ Node* Parser::readCommand1()
         outOfMemory(s);
         NodeSwitch* saveSwitch = lastSwitch;
         lastSwitch = s;
-        Node *first=0, *last=0;
-        Tree::linkNode(first, last, readBlock());
-        Tree::linkNode(first, last, breakLabel);
-        s->body = first;
+        Block b;
+        b << readBlock();
+        b << breakLabel;
+        s->body = b.first;
         if(!s->defaultLabel) s->defaultLabel = breakLabel;
         lastSwitch = saveSwitch;
         breakLabel = oldBreakLabel;
         return s;
     }
 
-    if(lastSwitch && p.ifToken("default"))
+    if(p.ifToken("default"))
     {
+        if(!lastSwitch) p.syntaxError("default без switch");
         p.needToken(":");
-        Node* n = new NodeLabel(world.intLabels);
-        lastSwitch->setDefault(n);
+        NodeLabel* n = new NodeLabel;
+        if(!lastSwitch->setDefault(n)) p.syntaxError("default уже был");
         return n;
     }
 
-  if(lastSwitch && p.ifToken("case")) {
-    int i = readConst(lastSwitch->var->dataType);
-    p.needToken(":");
-    Node* n = new NodeLabel(world.intLabels);
-    lastSwitch->addCase(i, n);
-    return n;
-  }
+    if(p.ifToken("case"))
+    {
+        if(!lastSwitch) p.syntaxError("case без switch");
+        uint32_t i = readConst(lastSwitch->var->dataType);
+        p.needToken(":");
+        NodeLabel* n = new NodeLabel;
+        if(!lastSwitch->addCase(i, n)) p.syntaxError("case уже был");
+        return n;
+    }
 
-  if(p.ifToken("return")) {
-    if(!curFn->retType.isVoid()) return new NodeReturn(nodeConvert(readVar(), curFn->retType));
-    return new NodeReturn(0);
-  }
+    if(p.ifToken("return"))
+    {
+        if(curFn->retType.isVoid()) return outOfMemory(new NodeReturn(0));
+        return outOfMemory(new NodeReturn(nodeConvert(readVar(), curFn->retType, true))); //! Если сработает outOfMemory, то будет утечка памяти
+    }
 
-  bool reg = p.ifToken("register");
-  Type t = readType(false);
-  if(t.baseType != cbtError) {
-    Node *first=0, *last=0;
-    do {
-      Type t1 = t;
-      readModifiers(t1);
-      const char* n = p.needIdent();
-      if(!checkStackUnique(n)) p.syntaxError("Дубликат");
-      unsigned stackOff = stackVars.size()==0 || stackVars.back().arg ? 0 : (stackVars.back().addr + stackVars.back().type.size());
-      if(t1.size()>=2) stackOff = (stackOff+1)&~1;           
+    // Описание переменной и её инициализация
+    bool reg = p.ifToken("register");
+    Type t = readType(false);
+    if(t.baseType != cbtError)
+    {
+        Block b;
+        do
+        {
+            // Модификаторы типа
+            Type t1 = t;
+            readModifiers(t1);
 
-      unsigned stackSize = ((stackOff + t1.size() + 1)&~1);
-      if(curFn->stackSize < stackSize) curFn->stackSize = stackSize;
+            // Имя
+            const char* n = p.needIdent();
+            if(!checkStackUnique(n)) p.syntaxError("Дубликат");
 
-      stackVars.push_back(StackVar());
-      StackVar& v = stackVars.back();
-      v.name = n;
-      if(p.ifToken("["))
-      {
-          t1.arr = readConstU16(); //p.needInteger();
-          if(t1.arr <= 0) throw std::runtime_error("[]");
-          p.needToken("]");
-          t1.addr++;
-      }
-      //const char* nn = stringBuf(n);
-      v.addr = stackOff;
-      v.arg  = false;
-      v.type = t1;
-      //!asm_decl(curFn->decl, fnName, n, t1);
-//      Type t2 = t1;
-//      t2.addr++;
-//!!!!!!!!!!      NodeConst nc(fnName+"_"+n, t2, /*stack*/true);
-//!!!!!!!!!!      curFn->localVars.push_back(nc.var);
-      if(p.ifToken("=")) {
-        //putRemark();
-        Tree::linkNode(first, last, nodeOperator(oSet, getStackVar(v), nodeConvert(readVar(-1), t1)));
-      }
-    } while(p.ifToken(","));
+            // Массив
+            if(p.ifToken("["))
+            {
+                t1.arr = readConstU16();
+                if(t1.arr <= 0) throw std::runtime_error("[]");
+                p.needToken("]");
+                t1.addr++;
+            }
+
+            // Адрес в стеке
+            unsigned stackOff = (stackVars.size()==0 || stackVars.back().arg) ? 0 : (stackVars.back().addr + stackVars.back().type.size());
+            if(t1.size()>=2) stackOff = (stackOff + 1 ) & ~1;
+
+            // Размер стека
+            unsigned stackSize = ((stackOff + t1.size() + 1) & ~1);
+            if(curFn->stackSize < stackSize) curFn->stackSize = stackSize;
+
+            // Сохраняем информацию
+            stackVars.push_back(StackVar());
+            StackVar& v = stackVars.back();
+            v.name = n;
+            v.addr = stackOff;
+            v.arg  = false;
+            v.type = t1;
+            v.reg  = reg;
+
+            // Инициализация
+            if(p.ifToken("=")) b << nodeOperator(oSet, getStackVar(v), nodeConvert(readVar(-1), t1, true));
+        } while(p.ifToken(","));
+        p.needToken(";");
+        return b.first;
+    }
+    if(reg) p.syntaxError();
+
+    // Остальные команды
+    Block b;
+    do { b << readVar(); } while(p.ifToken(","));
     p.needToken(";");
-    return first;
-  }
-  if(reg) p.syntaxError();
-
-  // Команды
-  Node *first=0, *last=0;
-
-  do {
-    Tree::linkNode(first, last, readVar(-1));
-  } while(p.ifToken(","));
-  p.needToken(";");
-  return first;
+    return b.first;
 }
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -1067,12 +1002,11 @@ Node* Parser::readCommand()
 
 Node* Parser::readBlock()
 {
-    Node *first = 0, *last = 0;
-    int s = stackVars.size();
-    while(!p.ifToken("}"))
-        Tree::linkNode(first, last, readCommand());
-    stackVars.resize(s);
-    return first;
+    int prevStackSize = stackVars.size();
+    Block b;
+    while(!p.ifToken("}")) b << readCommand();
+    stackVars.resize(prevStackSize);
+    return b.first;
 }
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -1083,7 +1017,7 @@ Function* Parser::parseFunction(Type& retType, const std::string& name)
 
     Function* f = world.findFunction(name);
 
-    std::vector<Type> argTypes;
+    std::vector<FunctionArg> argTypes;
     if(!p.ifToken(")"))
     {
         unsigned off = 2;
@@ -1108,7 +1042,16 @@ Function* Parser::parseFunction(Type& retType, const std::string& name)
                 p.needToken("]");
                 t.addr++;
             }
-            argTypes.push_back(t);
+
+            unsigned reg = 0;
+
+            if(p.ifToken("@"))
+            {
+                const char* args[] = { "r0", "r1", "r2", "r3", "r4", "r5", 0  };
+                reg = p.needToken(args) + 1;
+            }
+
+            argTypes.push_back(FunctionArg(t, reg));
 
             v.addr = off;
             v.arg  = true;
@@ -1130,7 +1073,16 @@ Function* Parser::parseFunction(Type& retType, const std::string& name)
         //!!!!!!!!!! Сравнить типы
     }
 
+    bool fa = false;
+    if(p.ifToken("@"))
+    {
+        p.needIdent(); //! Сохранить адрес
+        fa = true;
+    }
+
     if(p.ifToken(";")) return 0; // proto
+
+    if(fa) p.syntaxError();
 
     p.needToken("{");
 
@@ -1215,121 +1167,126 @@ void Parser::arrayInit(std::vector<uint8_t>& data, Type& type)
 
 //---------------------------------------------------------------------------------------------------------------------
 
-static const char* operators1[] = {
+void Parser::parse2()
+{
+    bool typedef1  = p.ifToken("typedef");
+    bool extren1   = !typedef1 && p.ifToken("extern");
+    bool static1   = !typedef1 && !extren1 && p.ifToken("static");
+    bool register1 = !typedef1 && !extren1 && p.ifToken("register");
+
+    Type fnType1  = readType(true);
+
+    while(1)
+    {
+        Type type = fnType1;
+        readModifiers(type);
+
+        std::string name = p.needIdent();
+
+        if(p.ifToken("("))
+        {
+            if(typedef1) p.syntaxError("typedef не поддерживает функции");
+            parseFunction(type, name);
+            break;
+        }
+
+        if(type.arr==0 && p.ifToken("["))
+        {
+            if(p.ifToken("]")) {
+                type.arr = 1;
+            } else {
+                type.arr = readConstU16();
+                if(type.arr <= 0) throw std::runtime_error("[]");
+                p.needToken("]");
+            }
+            type.addr++;
+            if(p.ifToken("["))
+            {
+                type.addr++;
+                type.arr2 = readConstU16();
+                if(type.arr2 <= 0) throw std::runtime_error("[]");
+                p.needToken("]");
+                if(p.ifToken("[")) {
+                    type.addr++;
+                    type.arr3 = readConstU16();
+                    if(type.arr3 <= 0) throw std::runtime_error("[]");
+                    p.needToken("]");
+                }
+            }
+        }
+
+        if(typedef1)
+        {
+            if(!world.checkUnique(name)) p.syntaxError("Имя уже используется");
+            world.addTypedef(name.c_str(), type);
+        }
+        else
+        {
+            if(!extren1)
+            {
+                if(!world.checkUnique(name)) p.syntaxError("Имя уже используется");
+            } //!!! Сравнить типы данных
+
+            GlobalVar* g = world.addGlobalVar(name.c_str());
+            g->name    = name;
+            g->type    = type;
+            g->extren1 = extren1;
+            g->reg     = register1;
+            if(!extren1)
+                if(p.ifToken("="))
+                    arrayInit(g->data, g->type);
+        }
+
+        if(p.ifToken(";")) break;
+        p.needToken(",");
+    }
+}
+
+//---------------------------------------------------------------------------------------------------------------------
+
+static const char* c_operators[] = {
   ".", "..", "...", "++", "--", "/", "%", "*", "$", "+", "-",
   "<<", ">>", "<", ">", "<=", ">=", "==", "!=", "&",  "^",  "|", "&&",
   "||", "?", "=", "+=", "-=", "*=", "/=", "%=", ">>=", "<<=", "&=", "^=", "|=",
   "->", "//", "/*", "//", 0
 };
 
-//---------------------------------------------------------------------------------------------------------------------
+static const char* c_remark[] = {
+    "//", 0
+};
 
-void Parser::parse2()
+void Parser::start(unsigned step)
 {
-    stackVars.clear();
+    ::Parser::Config oldCfg = p.cfg;
 
-    while(p.token!=ttOperator || p.tokenText[0]!='}')
-    {
-        bool typedef1 = p.ifToken("typedef");
-        bool extren1 = !typedef1 && p.ifToken("extern");
-        bool static1 = !typedef1 && !extren1 && p.ifToken("static");
-        Type fnType1 = readType(true);
-        if(fnType1.baseType == cbtError) p.syntaxError();
+    p.cfg.cescape        = true;
+    p.cfg.eol            = false;
+    p.cfg.operators      = &c_operators[0];
+    p.cfg.remark         = c_remark;
+    p.cfg.caseSel        = true;
+    p.cfg.decimalnumbers = true;
 
-        //!!!!if(p.ifToken(";")) continue;
-
-        while(1)
-        {
-            Type type = fnType1;
-            readModifiers(type);
-
-            std::string name = p.needIdent();
-            if(!world.checkUnique(name)) p.syntaxError("Имя уже используется");
-
-            if(p.ifToken("(")) {
-                if(typedef1) p.syntaxError("typedef не поддерживает функции");
-                parseFunction(type, name);
-                break;
-            }
-
-            if(type.arr==0 && p.ifToken("[")) {
-                if(p.ifToken("]")) {
-                    type.arr = 1;
-                } else {
-                    type.arr = readConstU16();
-                    if(type.arr <= 0) throw std::runtime_error("[]");
-                    p.needToken("]");
-                }
-                type.addr++;
-                if(p.ifToken("[")) {
-                    type.addr++;
-                    type.arr2 = readConstU16();
-                    if(type.arr2 <= 0) throw std::runtime_error("[]");
-                    p.needToken("]");
-                    if(p.ifToken("[")) {
-                        type.addr++;
-                        type.arr3 = readConstU16();
-                        if(type.arr3 <= 0) throw std::runtime_error("[]");
-                        p.needToken("]");
-                    }
-                }
-            }
-
-            if(typedef1)
-            {
-                world.addTypedef(name.c_str(), type);
-            }
-            else
-            {
-                GlobalVar* g = world.addGlobalVar(name.c_str());
-                g->name    = name;
-                g->type    = type;
-                g->extren1 = extren1;
-                if(!extren1)
-                    if(p.ifToken("="))
-                        arrayInit(g->data, g->type);
-            }
-
-            if(p.ifToken(";")) break;
-            p.needToken(",");
-        }
-    }
-}
-
-//---------------------------------------------------------------------------------------------------------------------
-
-void Parser::parse(unsigned step)
-{
-    bool old_cfg_eol = p.cfg_eol; p.cfg_eol = false;
-    const char** old_cfg_operators = p.cfg_operators; p.cfg_operators = &operators1[0];
-    static const char* cRem[] = { "//", 0 };
-    const char** old_cfg_remark = p.cfg_remark; p.cfg_remark = cRem;
-    p.cfg_remark = cRem;
-    p.cfg_caseSel = true;
-    bool old__decimalnumbers = p.cfg_decimalnumbers; p.cfg_decimalnumbers = true;
     p.needToken(ttEol);
 
     if(step==0)
     {
-        parse2();
+        while(p.token!=ttOperator || p.tokenText[0]!='}')
+            parse2();
     }
     else
     {
-        unsigned l=0;
-        for(;;)
+        // Во время второго прохода мы просто пропускаем исходники
+        for(unsigned l=0;;)
         {
+            if(p.ifToken(ttEof)) break;
             if(l==0 && p.token==ttOperator && p.tokenText[0]=='}') break;
-            if(p.ifToken("}")) { l--; continue; }
+            if(p.ifToken("}")) { if(l==0) throw; l--; continue; }
             if(p.ifToken("{")) { l++; continue; }
             p.nextToken();
         }
     }
 
-    p.cfg_caseSel = false;
-    p.cfg_eol = old_cfg_eol;
-    p.cfg_operators = old_cfg_operators;
-    p.cfg_remark = old_cfg_remark;
-    p.cfg_decimalnumbers = old__decimalnumbers;
+    p.cfg = oldCfg;
     p.nextToken();
 }
 

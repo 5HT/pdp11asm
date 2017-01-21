@@ -100,7 +100,7 @@ bool Compiler::compileLine_8080() {
     { 0,C_NONE,0,0 }
   };
 
-  int n, i;
+  unsigned n, i;
   if(p.ifToken(allCommands, n)) {
     Command& c = allCommands[n];
     unsigned char opcode = c.opcode;

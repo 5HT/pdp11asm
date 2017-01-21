@@ -34,12 +34,12 @@ Compiler::Compiler() {
   needCreateOutputFile = true;
   lstWriter.out = &out;
   lstWriter.p = &p;
-  p.cfg_eol = true;
-  p.cfg_caseSel = false;
+  p.cfg.eol = true;
+  p.cfg.caseSel = false;
   static const char* asmRem[] = { ";", "//", 0 };
-  p.cfg_remark = asmRem;
+  p.cfg.remark = asmRem;
   static const char* asmOp[] = { "//", 0 };
-  p.cfg_operators = asmOp;
+  p.cfg.operators = asmOp;
 }
 
 //-----------------------------------------------------------------------------
@@ -97,7 +97,7 @@ itsLabel:
 bool Compiler::ifConst3(Parser::num_t& a, bool numIsLabel) {
   if(!ifConst4(a, numIsLabel)) return false;
   static const char* ops[] = { "+", "-", "*", "/", 0 };
-  int o;
+  unsigned o;
   while(p.ifToken(ops, o)) {
     Parser::num_t b;
     if(!ifConst4(b, numIsLabel)) p.syntaxError();
@@ -121,12 +121,12 @@ Parser::num_t Compiler::readConst3(bool numIsLabel) {
 
 //-----------------------------------------------------------------------------
 
-void Compiler::compileOrg() {
-  Parser::num_t o = readConst3();
-  if(o < 0 || o > sizeof(out.writeBuf)) p.syntaxError();
-  out.writePosChanged = true;
-  out.writePtr = (size_t)o;
-  return;
+void Compiler::compileOrg()
+{
+    Parser::num_t o = readConst3();
+    if(o < 0 || o > sizeof(out.writeBuf)) p.syntaxError();
+    out.writePosChanged = true;
+    out.writePtr = (size_t)o;
 }
 
 //-----------------------------------------------------------------------------
@@ -228,7 +228,7 @@ bool Compiler::compileLine2() {
     if(p.ifToken("i8080")) {
       lstWriter.hexMode = true;
       processor = P_8080;
-      p.cfg_decimalnumbers = true;
+      p.cfg.decimalnumbers = true;
       return true;
     }
     if(p.ifToken("PDP11")) {
@@ -262,15 +262,15 @@ bool Compiler::compileLine2() {
       for(;p.tokenNum>0; p.tokenNum--) out.write16(0);
       return true;
     }
-    p.altstring = '/';
+    p.cfg.altstring = '/';
     if(p.ifToken("ascii")) {
-      p.altstring = 0;
+      p.cfg.altstring = 0;
       p.needToken(ttString2);
       if(convert1251toKOI8R) cp1251_to_koi8r(p.loadedText);
       out.write(p.loadedText, strlen(p.loadedText));
       return true;
     }
-    p.altstring = 0;
+    p.cfg.altstring = 0;
     p.syntaxError();
   }
 
@@ -319,7 +319,7 @@ bool Compiler::compileLine2() {
   }
 
   if(p.ifToken("decimalnumbers")) {
-    p.cfg_decimalnumbers = !p.ifToken("OFF");
+    p.cfg.decimalnumbers = !p.ifToken("OFF");
     return true;
   }
 
@@ -441,7 +441,7 @@ void Compiler::compileFile(const syschar_t* fileName) {
 
       // ????????? ??????
       if(p.ifToken("{")) {
-          cp.parse(s);
+          cp.start(s);
           cc.start(s);
       }
       else
@@ -451,9 +451,9 @@ void Compiler::compileFile(const syschar_t* fileName) {
         if(step2) lstWriter.afterCompileLine3();
       }
       if(p.ifToken(ttEof)) break;
-      if(s==0) processLabels();
       //! ?????? ? ????? ?????? ????? ???? ????? ??????  p.needToken(ttEol);
     }
+    if(s==0) processLabels();
   }
 
   if(needCreateOutputFile && out.min<out.max) {

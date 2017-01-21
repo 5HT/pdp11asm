@@ -5,52 +5,58 @@
 #include <map>
 #include <list>
 #include <vector>
+#include <stdint.h>
 
 enum Token { ttEof, ttEol, ttWord, ttInteger, ttOperator, ttString1, ttString2, ttComment };
 
 class Parser {
 public:
-  typedef unsigned long long num_t;
-  static const int maxTokenText = 256;
+    class Config {
+    public:
+        const char** operators;
+        const char** remark;
+        bool caseSel;
+        char altstring;
+        bool eol;
+        bool cescape;
+        bool decimalnumbers; // пїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ 10-пїЅпїЅпїЅпїЅ, пїЅпїЅпїЅпїЅпїЅ 8-пїЅпїЅпїЅпїЅпїЅпїЅ
+    };
+
+  typedef uint32_t num_t;
+  static const size_t maxTokenText = 256;
   typedef char TokenText[maxTokenText];
 
-  // Настройки
-  const char** cfg_operators;
-  const char** cfg_remark;
-  bool cfg_caseSel;
-  char altstring;
-  bool cfg_eol;
-  bool cfg_cescape;
-  bool cfg_decimalnumbers; // Числа по умолчанию 10-чные, иначе 8-ричные
+  // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
+  Config cfg;
 
-  // Для вывода ошибки
+  // пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
   std::string fileName; 
 
-  // Буфер
+  // пїЅпїЅпїЅпїЅпїЅ
   std::string source;
 
-  // Курсор
+  // пїЅпїЅпїЅпїЅпїЅпїЅ
   const char *firstCursor;
   const char *cursor, *prevCursor, *sigCursor;
   size_t line, prevLine, sigLine;
   size_t col, prevCol, sigCol;
 
-  // Загруженный токен
+  // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
   Token token;
   TokenText tokenText;
   num_t tokenNum;  
 
-  // Прошлый токен
+  // пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
   TokenText loadedText;
   num_t loadedNum;
 
-  //  Методы
+  //  пїЅпїЅпїЅпїЅпїЅпїЅ
   Parser();
   void init(const char* text);
   void nextToken();
   void nextToken2();
 
-  // Переходы
+  // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
   struct Label {
     const char* cursor;
     size_t line, col;
@@ -61,19 +67,19 @@ public:
   void getLabel(Label&);
   void jump(Label&);
 
-  // Ошибка
+  // пїЅпїЅпїЅпїЅпїЅпїЅ
   void syntaxError(const char* text = 0);
 
-  // Сравнение
+  // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
   inline bool ifToken(Token t) { if(token != t) return false; nextToken(); return true; }
   inline void needToken(Token t) { if(token != t) syntaxError(); nextToken(); }
   inline const char* needIdent() { needToken(ttWord); return loadedText; }
   bool ifToken(const char* text);  
   inline void needToken(const char* text) { if(!ifToken(text)) syntaxError(); }
-  bool ifToken(const char** a, int& n);
-  inline int needToken(const char** a) { int n; if(!ifToken(a, n)) syntaxError(); return n; }
+  bool ifToken(const char** a, unsigned &n);
+  inline unsigned needToken(const char** a) { unsigned n; if(!ifToken(a, n)) syntaxError(); return n; }
 
-  template<class T> inline bool ifToken(T* a, int& n) {    
+  template<class T> inline bool ifToken(T* a, unsigned& n) {
     for(T* i = a; i->name; i++) {
       if(ifToken(i->name)) {
         n = i - a;

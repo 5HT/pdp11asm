@@ -43,8 +43,7 @@ template<class T> inline void assure_and_fast_null(std::vector<T>& a, unsigned e
         do
         {
             s += s/2 + 1; // переполнение маловероятно
-        }
-        while(e >= s);
+        } while(e >= s);
         a.resize(s);
         memset(&a[os], -1, (s-os)*sizeof(T));
     }

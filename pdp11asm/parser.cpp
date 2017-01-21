@@ -5,12 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdexcept>
-
-static std::string i2s(size_t i) {
-  char buf[32];
-  snprintf(buf, sizeof(buf), "%i", int(i)); // а х.з.
-  return buf;
-}
+#include <memory>
 
 //-----------------------------------------------------------------------------
 
@@ -36,11 +31,11 @@ static int findx(const char** a, const char* s, size_t si) {
 //-----------------------------------------------------------------------------
 
 Parser::Parser() {
-  cfg_caseSel=false;
-  cfg_cescape=false;
-  cfg_remark = 0;
-  cfg_operators = 0;
-  cfg_decimalnumbers = false;
+  cfg.caseSel=false;
+  cfg.cescape=false;
+  cfg.remark = 0;
+  cfg.operators = 0;
+  cfg.decimalnumbers = false;
 
   sigCursor = prevCursor = cursor = 0;
   sigLine = prevLine = line = 1;
@@ -70,7 +65,7 @@ void Parser::init(const char* buf) {
   line = col = 1;
   firstCursor = prevCursor = cursor = buf;
   token = ttEof;   
-  altstring = 0;
+  cfg.altstring = 0;
   nextToken();
 }
 
@@ -94,7 +89,7 @@ void Parser::nextToken() {
   sigCursor = cursor;
 
     do {
-        for(;*cursor==32 || *cursor==13 || (!cfg_eol && *cursor==10) || *cursor==9; cursor++)
+        for(;*cursor==32 || *cursor==13 || (!cfg.eol && *cursor==10) || *cursor==9; cursor++)
             if(*cursor==10) { line++; col=1; }
             else if(*cursor!=13) col++;
 
@@ -116,7 +111,7 @@ retry:
         if(c!=' ' && c!=10 && c!=13 && c!=9) break;
         cursor++;
         if(c==10) line++, col=1;
-        if(cfg_eol && c==10) {
+        if(cfg.eol && c==10) {
             token=ttEol;
             return;
         }
@@ -137,7 +132,7 @@ retry:
 
 bool Parser::ifToken(const char* t) {
   if(token==ttWord || token==ttOperator) { 
-    if(cfg_caseSel) {
+    if(cfg.caseSel) {
       if(0 == strcmp(tokenText, t)) { nextToken(); return true; }
     } else {
       if(0 == strcasecmp(tokenText, t)) { nextToken(); return true; }
@@ -165,19 +160,19 @@ void Parser::nextToken2() {
     tokenText[tokenText_ptr]=0;
     token=ttWord;
 
-    if(!cfg_caseSel)
+    if(!cfg.caseSel)
       for(char* p = tokenText, *pe = tokenText + tokenText_ptr; p < pe; p++)
         *p = (char)toupper(*p);
     return;
   }
 
-  if(c=='\'' || c=='"' || c==altstring) {
+  if(c=='\'' || c=='"' || c==cfg.altstring) {
     char quoter=c;
     for(;;) {
       c=*cursor;
       if(c==0 || c==10 || c==13) syntaxError("Unterminated string");
       cursor++; 
-      if(!cfg_cescape) {
+      if(!cfg.cescape) {
         if(c==quoter) {
           if(*cursor!=quoter) break;
           cursor++; 
@@ -256,7 +251,7 @@ void Parser::nextToken2() {
       case 'o': case 'O': if(radix==16) syntaxError("Incorrect number"); radix = 8; pe++; break;
       case 'h': case 'H': if(radix==16) syntaxError("Incorrect number"); radix = 16; pe++; break;
       case '.':           if(radix==16) syntaxError("Incorrect number"); radix = 10; pe++; break;
-      default: if(radix==0) radix = cfg_decimalnumbers ? 10 : 8;
+      default: if(radix==0) radix = cfg.decimalnumbers ? 10 : 8;
     }
 
     // Контроль
@@ -287,7 +282,7 @@ void Parser::nextToken2() {
   tokenText[1] = 0;
 
   // Составной оператор
-  if(cfg_operators) {
+  if(cfg.operators) {
     // Добавляем остальные символы
     tokenText_ptr = 1;
     for(;;) {
@@ -295,7 +290,7 @@ void Parser::nextToken2() {
       if(c==0) break;
       tokenText[tokenText_ptr] = c;
       tokenText[tokenText_ptr+1] = 0;
-      if(findx(cfg_operators, tokenText, tokenText_ptr+1)==-1) break;
+      if(findx(cfg.operators, tokenText, tokenText_ptr+1)==-1) break;
       cursor++;
       tokenText_ptr++;
       if(tokenText_ptr==maxTokenText) syntaxError("Too large operator");
@@ -303,9 +298,9 @@ void Parser::nextToken2() {
     tokenText[tokenText_ptr]=0;
   }
   // Комментарии
-  if(cfg_remark) {
-    for(int j=0; cfg_remark[j]; j++) {
-      if(0==strcmp(tokenText,cfg_remark[j])) {
+  if(cfg.remark) {
+    for(int j=0; cfg.remark[j]; j++) {
+      if(0==strcmp(tokenText,cfg.remark[j])) {
         for(;;) {
           c=*cursor;
           if(c==0 || c==10) break;
@@ -320,8 +315,16 @@ void Parser::nextToken2() {
 
 //-----------------------------------------------------------------------------
 
-void Parser::syntaxError(const char* text) {
-  throw std::runtime_error((fileName + "(" + i2s(prevLine) + "," + i2s(prevCol) + "): " + (text ? text : "Syntax error")).c_str());
+void Parser::syntaxError(const char* text)
+{
+    char* s = 0;
+    bool i = (token==ttWord || token==ttString1 || token==ttString2 || token==ttOperator);
+    if(asprintf(&s, "%s(%zu,%zu): %s%s%s%s", fileName.c_str(), prevLine, prevCol,
+       text ? text : "Синтаксическая ошибка", i ? " (" : "", i ? tokenText : "", i ? ")" : "") == -1)
+        throw std::runtime_error("Out of memory");
+    std::auto_ptr<char> sp(s);
+    std::string o = sp.get();
+    throw std::runtime_error(o.c_str());
 }
 
 //-----------------------------------------------------------------------------
@@ -335,7 +338,7 @@ void Parser::jump(Label& label) {
 
 //-----------------------------------------------------------------------------
 
-bool Parser::ifToken(const char** a, int& n) {
+bool Parser::ifToken(const char** a, unsigned& n) {
   for(const char** i = a; *i; i++) {
     if(ifToken(*i)) {
       n = i - a;

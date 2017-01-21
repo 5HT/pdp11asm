@@ -43,9 +43,7 @@ public:
 
     Arg11(Arg11Type _type, unsigned _reg, unsigned _value, std::string _str) : type(_type), reg(_reg), value(_value), str(_str) {}
     Arg11(Arg11Type _type=atReg, unsigned _reg=0, unsigned _value=0) : type(_type), reg(_reg), value(_value) {}
-
-    inline static Arg11 val(unsigned value) { return Arg11(atValue, 0, value); }
-    static Arg11 r0,r1,r2,r3,r4,sp,null;
+    static Arg11 r0,r1,r2,r3,r4,sp,pc,null;
 };
 
 enum Cmd11a
@@ -80,13 +78,19 @@ public:
     public:
         size_t addr;
         unsigned label;
+        unsigned type;
 
-        Fixup(size_t _addr=0, unsigned _label=0) : addr(_addr), label(_label) {}
+        Fixup(size_t _addr=0, unsigned _label=0, unsigned _type=0) : addr(_addr), label(_label), type(_type) {}
     };
 
     Compiler& c;
     std::vector<Fixup> fixups;
     std::vector<size_t> labels;
+    unsigned fs;
+    unsigned step;
+    unsigned step_pos;
+    unsigned step_mac;
+    unsigned labelsCnt;
 
     AsmPdp11(Compiler& _c);
     void arg(const Arg11& a);
@@ -99,9 +103,12 @@ public:
     void xor_r_a(unsigned r, Arg11& a);
     void cmd(Cmd11c cmd, unsigned addLocalLabel);
     void addLocalLabel(unsigned n);
-    void resetLocalLabels();
-    bool processLocalLabel(Fixup& f);
-    void processLocalLabels();
+    void step2();
+    void addLocalFixup(unsigned label);
+    void step0();
+    void step1();
+    Cmd11c invertCmd(Cmd11c o);
+
 };
 
 }

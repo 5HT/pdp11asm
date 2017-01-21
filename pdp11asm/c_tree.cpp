@@ -2,9 +2,19 @@
 
 #include "c_tree.h"
 #include <string.h>
+#include "tools.h"
 
 namespace C
 {
+
+class TreePrepare {
+public:
+    unsigned prepare_arg;
+    unsigned labelsCnt;
+
+    TreePrepare() { prepare_arg=0; labelsCnt=0; }
+    void prepare(Node* n);
+};
 
 //---------------------------------------------------------------------------------------------------------------------
 
@@ -145,14 +155,25 @@ Node* Tree::postIncOpt(Node* v)
 
 //---------------------------------------------------------------------------------------------------------------------
 
-void Tree::linkNode(Node*& first, Node*& last, Node* element)
+Block::Block()
+{
+    first = 0;
+    last = 0;
+}
+
+//---------------------------------------------------------------------------------------------------------------------
+
+void Block::operator << (Node* element)
 {
     if(element)
     {
-        element = postIncOpt(element);
-        if(first == 0) {
+        element = Tree::postIncOpt(element);
+        if(first == 0)
+        {
            first = last = element;
-        } else {
+        }
+        else
+        {
             while(last->next) last = last->next;
             last->next = element;
         }
@@ -177,7 +198,17 @@ Operator Tree::inverseOp(Operator o)
 
 //---------------------------------------------------------------------------------------------------------------------
 
-void Tree::prepare(Node* n)
+void treePrepare(Function* f)
+{
+    TreePrepare p;
+    p.prepare_arg = f->stackSize;
+    p.prepare(f->rootNode);
+    f->labelsCnt = p.labelsCnt;
+}
+
+//---------------------------------------------------------------------------------------------------------------------
+
+void TreePrepare::prepare(Node* n)
 {
     for(;n; n=n->next)
     {
@@ -200,8 +231,8 @@ void Tree::prepare(Node* n)
             case ntCall:
             {
                 NodeCall* c = n->cast<NodeCall>();
-                for(unsigned i=0; i<c->args.size(); i++)
-                    prepare(c->args[i]);
+                for(unsigned i=0; i<c->args1.size(); i++)
+                    prepare(c->args1[i]);
                 break;
             }
             case ntDeaddr:
@@ -209,6 +240,7 @@ void Tree::prepare(Node* n)
                 break;
             case ntSwitch:
                 prepare(n->cast<NodeSwitch>()->var);
+                prepare(n->cast<NodeSwitch>()->body);
                 break;
             case ntReturn:
                 prepare(n->cast<NodeReturn>()->var);
@@ -233,8 +265,80 @@ void Tree::prepare(Node* n)
                 prepare(n->cast<NodeIf>()->t);
                 prepare(n->cast<NodeIf>()->f);
                 break;
+            case ntLabel:
+                n->cast<NodeLabel>()->n1 = labelsCnt++;
+                break;
+            case ntAsm:
+            case ntSP:
+                break;
         }
     }
 }
 
+//---------------------------------------------------------------------------------------------------------------------
+
+Node* Tree::allocIf(NodeVar* cond, Node* t, Node* f)
+{
+    // Константа в условии
+    if(cond->isConst())
+    {
+        if(!cond->cast<NodeConst>()->isNull())
+        {
+            delete cond;
+            delete f;
+            return t;
+        }
+        else
+        {
+            delete cond;
+            delete t;
+            return f;
+        }
+    }
+
+    return outOfMemory(new NodeIf(cond, t, f));
+}
+
+//---------------------------------------------------------------------------------------------------------------------
+
+NodeVar* Tree::allocOperatorIf(NodeVar* cond, NodeVar* a, NodeVar* b)
+{
+    assert(a->dataType.eq(b->dataType));
+
+    // Константа в условии
+    if(cond->isConst())
+    {
+        if(!cond->cast<NodeConst>()->isNull())
+        {
+            delete cond;
+            delete b;
+            return a;
+        }
+        else
+        {
+            delete cond;
+            delete a;
+            return b;
+        }
+    }
+
+    return outOfMemory(new NodeOperatorIf(a->dataType, a, b, cond));
+}
+
+//---------------------------------------------------------------------------------------------------------------------
+
+NodeJmp* Tree::allocJmp(NodeLabel* label, NodeVar* cond, bool ifFalse)
+{
+    // Константа в условии
+    if(cond && cond->isConst())
+    {
+        bool constFalse = cond->cast<NodeConst>()->isNull();
+        if(ifFalse) constFalse = !constFalse;
+        delete cond;
+        cond = 0;
+        if(constFalse) return 0;
+    }
+
+    return outOfMemory(new NodeJmp(label, cond, ifFalse));
+}
 }

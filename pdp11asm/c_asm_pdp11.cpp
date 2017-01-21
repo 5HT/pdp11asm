@@ -11,6 +11,7 @@ Arg11 Arg11::r2(atReg, 2);
 Arg11 Arg11::r3(atReg, 3);
 Arg11 Arg11::r4(atReg, 4);
 Arg11 Arg11::sp(atReg, 6);
+Arg11 Arg11::pc(atReg, 7);
 Arg11 Arg11::null(atValue, 0, 0);
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -23,7 +24,7 @@ AsmPdp11::AsmPdp11(Compiler& _c) : c(_c) {
 void AsmPdp11::arg(const Arg11& a)
 {
     if(a.type<6) return;
-    if(!a.str.empty()) c.addFixup(ucase(a.str));
+    if(step==1 && !a.str.empty()) c.addFixup(ucase(a.str));
     c.out.write16(a.value);
 }
 
@@ -67,7 +68,7 @@ void AsmPdp11::push(Arg11& a)
 
 void AsmPdp11::pop(Arg11& a)
 {
-    cmd(cmdMov, a, Arg11(atRegMemInc, 6));
+    cmd(cmdMov, Arg11(atRegMemInc, 6), a);
 }
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -82,16 +83,40 @@ void AsmPdp11::ret()
 void AsmPdp11::call(const char* name, uint16_t addr)
 {
     c.out.write16(004000|(/*PC*/7<<6)|(3<<3)|(/*PC*/7));
-    if(name[0] != 0) c.addFixup(ucase(name)); //! Так нельзя
+    if(step==1 && name[0] != 0) c.addFixup(ucase(name)); //! Так нельзя
     c.out.write16(addr);
 }
 
 //---------------------------------------------------------------------------------------------------------------------
 
-void AsmPdp11::cmd(Cmd11c cmd, unsigned label)
+void AsmPdp11::cmd(Cmd11c co, unsigned label)
 {
-    fixups.push_back(Fixup(c.out.writePtr, label));
-    c.out.write16(cmd << 6);
+    // Второй проход
+    if(step==1)
+    {
+        if(fs >= fixups.size()) throw std::runtime_error("fixup0");
+        Fixup& f = fixups[fs];
+        switch(f.type)
+        {
+            case 0: cmd(cmdMov, Arg11::null, Arg11::pc); break; // MOV
+            case 1: c.out.write16((invertCmd(co) << 6) | 2); cmd(cmdMov, Arg11::null, Arg11::pc); break; // BCC+MOV
+            case 2: c.out.write16(co << 6); break; // BR
+        }
+        f.addr = c.out.writePtr-2;
+        fs++;
+        return;
+    }
+
+    if(co != cmdBr) c.out.write16(co << 6);
+    cmd(cmdMov, Arg11::null, Arg11::pc);
+    fixups.push_back(Fixup(c.out.writePtr-2, label, co==cmdBr ? 0 : 1));
+}
+
+//---------------------------------------------------------------------------------------------------------------------
+
+void AsmPdp11::addLocalFixup(unsigned label)
+{
+    fixups.push_back(Fixup(c.out.writePtr, label, 3));
 }
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -100,44 +125,86 @@ void AsmPdp11::addLocalLabel(unsigned n)
 {
     assure_and_fast_null(labels, n);
     labels[n] = c.out.writePtr;
-
-    if(c.step2)
-    {
-        c.lstWriter.beforeCompileLine();
-        c.lstWriter.afterCompileLine2();
-        c.lstWriter.appendBuffer(i2s(n).c_str());
-        c.lstWriter.appendBuffer(":\r\n");
-    }
 }
 
 //---------------------------------------------------------------------------------------------------------------------
 
-void AsmPdp11::resetLocalLabels()
+void AsmPdp11::step0()
 {
+    fs = 0;
+    step = 0;
+    step_pos = c.out.writePtr;
+    step_mac = c.out.max;
+    labelsCnt = 0;
     labels.clear();
     fixups.clear();
 }
 
 //---------------------------------------------------------------------------------------------------------------------
 
-bool AsmPdp11::processLocalLabel(Fixup& f)
+void AsmPdp11::step1()
 {
-    if(f.label >= labels.size()) return true;
-    unsigned lp = labels[f.label];
-    if(lp == (unsigned)-1) return true;
-    int d = lp - (f.addr + 2);
-    if((d & 1)!=0 || d<-256 || d>=256) throw std::runtime_error("far fixup"); //!!!!!!!!
-    *(uint16_t*)(c.out.writeBuf + f.addr) |= (d / 2) & 0xFF;
-    return false;
+    for(unsigned i=0; i<fixups.size(); i++)
+    {
+        Fixup& f = fixups[i];
+        if(f.type == 3) continue;
+        if(f.label >= labels.size()) throw std::runtime_error("fixup1");
+        unsigned lp = labels[f.label];
+        if(lp == (unsigned)-1) throw std::runtime_error("fixup2");
+        int d = lp - f.addr;
+        if(f.type == 0) d += 2; // Если MOV заменяется на BR, то дельту корректировать не надо. Если BR+MOV на BR, то нужно -2
+        if((d & 1) != 0) throw std::runtime_error("fixup3");
+        if(d>=-256 && d<=254) f.type=2;
+    }
+
+    fs = 0;
+    step = 1;
+    labelsCnt = 0;
+    c.out.writePtr = step_pos;
+    c.out.max = step_mac;
 }
 
 //---------------------------------------------------------------------------------------------------------------------
 
-void AsmPdp11::processLocalLabels()
+void AsmPdp11::step2()
 {
     for(unsigned i=0; i<fixups.size(); i++)
-        if(processLocalLabel(fixups[i]))
-            throw std::runtime_error("fixup"); //!!!!!!!!
+    {
+        Fixup& f = fixups[i];
+        if(f.label >= labels.size()) throw std::runtime_error("fixup1");
+        unsigned lp = labels[f.label];
+        if(lp == (unsigned)-1) throw std::runtime_error("fixup2");
+
+        if(f.type != 2)
+        {
+            *(uint16_t*)(c.out.writeBuf + f.addr) = lp;
+        } else {
+            int d = lp - (f.addr + 2);
+            if((d & 1)!=0 || d<-256 || d>=256) throw std::runtime_error("far fixup");
+            *(uint16_t*)(c.out.writeBuf + f.addr) |= (d / 2) & 0xFF;
+        }
+    }
+}
+
+//---------------------------------------------------------------------------------------------------------------------
+
+Cmd11c AsmPdp11::invertCmd(Cmd11c o)
+{
+    switch(o)
+    {
+        case cmdBr:  return cmdBr;
+        case cmdBne: return cmdBeq;
+        case cmdBeq: return cmdBne;
+        case cmdBhi:  return cmdBlos;
+        case cmdBlo:  return cmdBhis;
+        case cmdBhis: return cmdBlo;
+        case cmdBlos: return cmdBhi;
+        case cmdBgt:  return cmdBle;
+        case cmdBlt:  return cmdBge;
+        case cmdBge:  return cmdBlt;
+        case cmdBle:  return cmdBlt;
+        default: throw std::runtime_error(" AsmPdp11.invertCmd");
+    }
 }
 
 }

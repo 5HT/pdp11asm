@@ -110,7 +110,7 @@ static SimpleCommand simpleCommands[] = {
 static SimpleCommand oneCommands[] = {
   "jmp", 00001, "swab", 00003,
   "clr", 00050, "clrb", 01050, "com",  00051, "comb", 01051,
-  "inc", 00052, "inBHIcb", 01052, "dec",  00053, "decb", 01053,
+  "inc", 00052, "incb", 01052, "dec",  00053, "decb", 01053,
   "neg", 00054, "negb", 01054, "adc",  00055, "adcb", 01055,
   "sbc", 00056, "sbcb", 01056, "tst",  00057, "tstb", 01057,
   "ror", 00060, "rorb", 01060, "rol",  00061, "rolb", 01061,
@@ -141,7 +141,7 @@ static SimpleCommand aCommands[] = {
 };
 
 bool Compiler::compileLine_pdp11() {
-  int n;
+  unsigned n;
   if(p.ifToken(simpleCommands, n)) {
     out.write16(simpleCommands[n].code);    
     return true;
@@ -222,8 +222,8 @@ bool Compiler::compileLine_pdp11() {
   return false;
 }
 
-static const char* modes[] = { "%s", "(%s)", "(%s)+", "@(%s)+", "-(%s)", "@-(%s)", "%u(%s)", "@%u(%s)", "?", "?", "#%u", "@#%u", "?", "?", "%u", "(%u)" };
-static const int   moder[] = { 0,    0,      0,       0,        0,       0,        1,        1,         0,   0,   1,     1,      0,   0,   1,    1,     };
+static const char* modes[] = { "%s", "(%s)", "(%s)+", "@(%s)+", "-(%s)", "@-(%s)", "%u(%s)", "@%u(%s)", "PC", "(PC)", "#%u", "@#%u", "-(PC)", "@-(PC)", "%u", "(%u)" };
+static const int   moder[] = { 0,    0,      0,       0,        0,       0,        1,        1,         0,    0,      1,     1,      0,       0,         1,    1,     };
 
 #define OUT_SUIZE 256;
 

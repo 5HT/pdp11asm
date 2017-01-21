@@ -12,12 +12,14 @@ namespace C
         ::Parser& p;
         Tree& world;
 
-        struct StackVar
+        class StackVar
         {
+        public:
             Type        type;
             std::string name;
             unsigned    addr;
             bool        arg;
+            bool        reg;
         };
 
         NodeLabel* breakLabel, *continueLabel;
@@ -25,33 +27,31 @@ namespace C
         std::vector<StackVar> stackVars;
         Function* curFn;
 
-        bool p_ifToken(const std::vector<std::string>& strs, int& o);
-        StackVar* p_ifToken(std::vector<StackVar>& a);
-        Function* p_ifToken(std::list<Function>& a);
-        GlobalVar* p_ifToken(std::list<GlobalVar>& a);
+        bool      ifToken(const std::vector<std::string>& strs, int& o);
+        StackVar* ifToken(std::vector<StackVar>& a);
+        Function* ifToken(std::list<Function>& a);
+        GlobalVar* ifToken(std::list<GlobalVar>& a);
         Operator findOperator(int level, int& l);
-        uint32_t readConst(Type& to);
+        uint32_t readConst(const Type& to);
         uint16_t readConstU16();
 
-        void parseStruct(Struct& s, int m);
-        NodeJmp* allocJmp(NodeLabel* _label, NodeVar* _cond, bool _ifZero);
-        NodeJmp* allocJmp(NodeLabel* _label);
+        void     parseStruct(Struct& s, int m);
         NodeVar* nodeMonoOperator(NodeVar* a, MonoOperator o);
         NodeVar* nodeAddr(NodeVar* x);
         NodeVar* getStackVar(StackVar& x);
         NodeVar* bindVar_2();
+        void     operatorType(unsigned& r, bool& sig, Type& a);
         Type     readType(bool error);
         Struct* parseStruct3(int m);
         NodeVar* readVar(int level=-1);
         void     readModifiers(Type& t);
         NodeVar* bindVar();
-        NodeVar* nodeConvert(NodeVar* x, Type type);
+        NodeVar* nodeConvert(NodeVar* x, Type type, bool auto_convert);
         NodeVar* nodeOperator(Operator o, NodeVar* a, NodeVar* b, bool noMul=false, NodeVar* cond=0);
         Node*    readBlock();
         Node*    readCommand();
         NodeVar* addFlag(NodeVar* a);
         NodeVar* nodeOperator2(Type type, Operator o, NodeVar* a, NodeVar* b);
-        NodeVar* nodeOperatorIf(Type type, NodeVar* a, NodeVar* b, NodeVar* cond);
         Node*    readCommand1();
         void     getRemark(std::string& out);
         Function*parseFunction(Type& retType, const std::string& fnName);
@@ -62,6 +62,6 @@ namespace C
     public:
         inline Parser(::Parser& _p, Tree& _world) : p(_p), world(_world) { breakLabel=0; continueLabel=0; lastSwitch=0; curFn=0; }
 
-        void     parse(unsigned step);
+        void     start(unsigned step);
     };
 }

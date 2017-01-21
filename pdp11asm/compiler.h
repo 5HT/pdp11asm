@@ -72,7 +72,7 @@ public:
 
     inline void addFixup(const std::string& name, unsigned d=0)
     {
-        fixups.push_back(Fixup(out.writePtr-d, name));
+        fixups.push_back(Fixup(out.writePtr-d, ucase(name)));
     }
 
     void addLabel(std::string& name)
