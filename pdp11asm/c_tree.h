@@ -214,10 +214,11 @@ namespace C
 
     class FunctionArg {
     public:
+        unsigned          n;
         Type              type;
         unsigned          reg;
 
-        FunctionArg(Type _type, unsigned _reg) : type(_type), reg(_reg) {};
+        FunctionArg(unsigned _n, Type _type, unsigned _reg) : n(_n), type(_type), reg(_reg) {};
     };
 
     struct Function {
@@ -230,8 +231,11 @@ namespace C
         Node*                    rootNode;
         bool                     compiled;
         unsigned                 labelsCnt;
+        unsigned                 call_type;
+        unsigned                 call_arg;
+        unsigned                 reg;
 
-        Function() { compiled=false; rootNode=0; addr=0; stackSize=0; labelsCnt=0; }
+        Function() { compiled=false; rootNode=0; addr=0; stackSize=0; labelsCnt=0; call_type=0; reg=0; }
         ~Function() { delete rootNode; }
     };
 

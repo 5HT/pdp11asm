@@ -37,6 +37,7 @@ public:
     void compileVar(Node* n, unsigned d, IfOpt* ifOpt=0);
     void compileBlock(Node* n);
     void compileFunction(Function* f);
+    void shift(const Arg11& al, const Arg11& ah, const Arg11& bl, bool r, char pf);
 
 public:
     void start(unsigned step);

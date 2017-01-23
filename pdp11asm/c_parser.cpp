@@ -116,9 +116,9 @@ NodeVar* Parser::bindVar_2()
     if(p.ifToken(ttString2)) //! Не обрабатываются строки с \x00 !!!
     {
         std::string buf;
-        buf += p.loadedText;
+        buf += std::string(p.loadedText, p.loadedTextSize);
         while(p.ifToken(ttString2))
-            buf += p.loadedText;
+            buf += std::string(p.loadedText, p.loadedTextSize);
         Type type;
         type.addr = 1;
         type.baseType = cbtChar;
@@ -198,6 +198,8 @@ NodeVar* Parser::bindVar_2()
 }
 
 //---------------------------------------------------------------------------------------------------------------------
+
+//! Заменить ((SP+const)+const)
 
 NodeVar* Parser::nodeOperator2(Type type, Operator o, NodeVar* a, NodeVar* b)
 {
@@ -475,7 +477,7 @@ xx:         if(a->dataType.baseType!=cbtStruct || a->dataType.addr!=0 || a->data
             }
             else
             {
-                a = nodeOperator(oAdd, a, i);
+                a = nodeOperator(oAdd, i, a);
             }
             a = new NodeDeaddr(a);
             continue;
@@ -710,6 +712,16 @@ Node* Parser::readCommand1()
     // Пустая команда
     if(p.ifToken(";")) return 0;
 
+    // Надо обработать перед меткой
+    if(p.ifToken("default"))
+    {
+        if(!lastSwitch) p.syntaxError("default без switch");
+        p.needToken(":");
+        NodeLabel* n = new NodeLabel;
+        if(!lastSwitch->setDefault(n)) p.syntaxError("default уже был");
+        return n;
+    }
+
     // Метка
     ::Parser::Label pl;
     p.getLabel(pl);
@@ -889,15 +901,6 @@ Node* Parser::readCommand1()
         return s;
     }
 
-    if(p.ifToken("default"))
-    {
-        if(!lastSwitch) p.syntaxError("default без switch");
-        p.needToken(":");
-        NodeLabel* n = new NodeLabel;
-        if(!lastSwitch->setDefault(n)) p.syntaxError("default уже был");
-        return n;
-    }
-
     if(p.ifToken("case"))
     {
         if(!lastSwitch) p.syntaxError("case без switch");
@@ -1020,7 +1023,7 @@ Function* Parser::parseFunction(Type& retType, const std::string& name)
     std::vector<FunctionArg> argTypes;
     if(!p.ifToken(")"))
     {
-        unsigned off = 2;
+        unsigned off = 2, n = 0;
         do
         {
             if(p.ifToken("...")) break; //! Не учитывается
@@ -1051,13 +1054,14 @@ Function* Parser::parseFunction(Type& retType, const std::string& name)
                 reg = p.needToken(args) + 1;
             }
 
-            argTypes.push_back(FunctionArg(t, reg));
+            argTypes.push_back(FunctionArg(n, t, reg));
 
             v.addr = off;
             v.arg  = true;
             v.type = t;
 
             off += v.type.size();
+            n++;
         } while(p.ifToken(","));
         p.needToken(")");
     }
@@ -1073,16 +1077,22 @@ Function* Parser::parseFunction(Type& retType, const std::string& name)
         //!!!!!!!!!! Сравнить типы
     }
 
-    bool fa = false;
     if(p.ifToken("@"))
     {
-        p.needIdent(); //! Сохранить адрес
-        fa = true;
+        p.needToken("emt");
+        p.needToken(ttInteger);
+        f->call_type = 1;
+        f->call_arg = p.tokenNum;
+        if(p.ifToken(","))
+        {
+            const char* args[] = { "r0", "r1", "r2", "r3", "r4", "r5", 0  };
+            f->reg = p.needToken(args) + 1;
+        }
     }
 
     if(p.ifToken(";")) return 0; // proto
 
-    if(fa) p.syntaxError();
+    if(f->call_type) p.syntaxError();
 
     p.needToken("{");
 
@@ -1142,10 +1152,9 @@ void Parser::arrayInit(std::vector<uint8_t>& data, Type& type)
         if(type.addr != 1 || type.sizeElement() != 1) p.syntaxError("Ожидается строка");
         size_t s = 0;
         do {
-            size_t s1 = strlen(p.loadedText);
-            data.resize(s + s1 + 1);
-            memcpy(&data[s], p.loadedText, s1 + 1);
-            s += s1;
+            data.resize(s + p.loadedTextSize + 1);
+            memcpy(&data[s], p.loadedText, p.loadedTextSize + 1);
+            s += p.loadedTextSize;
         } while(p.ifToken(ttString2));
         return;
     }
@@ -1233,8 +1242,18 @@ void Parser::parse2()
             g->extren1 = extren1;
             g->reg     = register1;
             if(!extren1)
+            {
                 if(p.ifToken("="))
                     arrayInit(g->data, g->type);
+
+                unsigned s = g->data.size();
+                unsigned ns = type.size();
+                if(s < ns)
+                {
+                    g->data.resize(ns);
+                    memset(&g->data[s], 0, ns-s);
+                }
+            }
         }
 
         if(p.ifToken(";")) break;

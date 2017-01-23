@@ -43,10 +43,12 @@ Parser::Parser() {
 
   token = ttEof;
   tokenNum = 0;
+  tokenTextSize = 0;
   tokenText[0] = 0;
 
   loadedNum = 0;
   loadedText[0] = 0;
+  loadedTextSize = 0;
 
   init("");
 }
@@ -78,6 +80,7 @@ void Parser::nextToken() {
     case ttString1:
     case ttString2:
       strcpy(loadedText, tokenText);
+      loadedTextSize = tokenTextSize;
       break;
     case ttInteger:
       loadedNum = tokenNum;
@@ -211,6 +214,7 @@ void Parser::nextToken2() {
       tokenText[tokenText_ptr++]=c;
     }        
     tokenText[tokenText_ptr]=0;
+    tokenTextSize = tokenText_ptr;
     token=quoter=='\'' ? ttString1 : ttString2;
     return;
   }

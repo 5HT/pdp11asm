@@ -96,8 +96,9 @@ public:
     void arg(const Arg11& a);
     void cmd(Cmd11a cmd, Arg11 a, Arg11 b);
     void cmd(Cmd11b cmd, Arg11 a);
-    void push(Arg11& a);
-    void pop(Arg11& a);
+    void push(const Arg11& a);
+    void pushb(const Arg11& a);
+    void pop(const Arg11& a);
     void ret();
     void call(const char* name, uint16_t addr=0);
     void xor_r_a(unsigned r, Arg11& a);
@@ -107,8 +108,9 @@ public:
     void addLocalFixup(unsigned label);
     void step0();
     void step1();
+    void emt(unsigned n) { c.out.write16(0104000 | (n & 0377)); }
+    void clc() { c.out.write16(0241); }
     Cmd11c invertCmd(Cmd11c o);
-
 };
 
 }

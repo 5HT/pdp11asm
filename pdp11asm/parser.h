@@ -44,10 +44,12 @@ public:
   // ����������� �����
   Token token;
   TokenText tokenText;
+  num_t tokenTextSize;
   num_t tokenNum;  
 
   // ������� �����
   TokenText loadedText;
+  num_t loadedTextSize;
   num_t loadedNum;
 
   //  ������

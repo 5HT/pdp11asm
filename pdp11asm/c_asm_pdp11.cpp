@@ -32,6 +32,7 @@ void AsmPdp11::arg(const Arg11& a)
 
 void AsmPdp11::cmd(Cmd11a cmd, Arg11 a, Arg11 b)
 {
+    // Замена BIC, BIS... на короткие аналоги
     if(a.type>=8) a.reg = 7;
     if(b.type>=8) b.reg = 7;
     c.out.write16((cmd<<12)|((a.type&7)<<9)|(a.reg<<6)|((b.type&7)<<3)|(b.reg));
@@ -59,14 +60,22 @@ void AsmPdp11::xor_r_a(unsigned r, Arg11& a)
 
 //---------------------------------------------------------------------------------------------------------------------
 
-void AsmPdp11::push(Arg11& a)
+void AsmPdp11::push(const Arg11& a)
 {
     cmd(cmdMov, a, Arg11(atRegMemDec, 6));
 }
 
 //---------------------------------------------------------------------------------------------------------------------
 
-void AsmPdp11::pop(Arg11& a)
+void AsmPdp11::pushb(const Arg11& a)
+{
+    cmd(cmdMovb, a, Arg11(atRegMemDec, 6));
+//    cmd(cmdDec, Arg11::sp);
+}
+
+//---------------------------------------------------------------------------------------------------------------------
+
+void AsmPdp11::pop(const Arg11& a)
 {
     cmd(cmdMov, Arg11(atRegMemInc, 6), a);
 }
@@ -101,6 +110,7 @@ void AsmPdp11::cmd(Cmd11c co, unsigned label)
             case 0: cmd(cmdMov, Arg11::null, Arg11::pc); break; // MOV
             case 1: c.out.write16((invertCmd(co) << 6) | 2); cmd(cmdMov, Arg11::null, Arg11::pc); break; // BCC+MOV
             case 2: c.out.write16(co << 6); break; // BR
+            default: throw std::runtime_error("AsmPdp11.cmdc");
         }
         f.addr = c.out.writePtr-2;
         fs++;
@@ -116,7 +126,16 @@ void AsmPdp11::cmd(Cmd11c co, unsigned label)
 
 void AsmPdp11::addLocalFixup(unsigned label)
 {
-    fixups.push_back(Fixup(c.out.writePtr, label, 3));
+    if(step==1)
+    {
+        if(fs >= fixups.size()) throw std::runtime_error("fixup0");
+        fixups[fs].addr = c.out.writePtr;
+        fs++;
+    }
+    else
+    {
+        fixups.push_back(Fixup(c.out.writePtr, label, 3));
+    }
 }
 
 //---------------------------------------------------------------------------------------------------------------------

@@ -5,8 +5,9 @@ bmpCursor:  	insert_bitmap2t "resources/cursor.bmp",  16, 16
 bmpF:    	insert_bitmap2 "resources/f.bmp", 16, 16
 bmpQ:    	insert_bitmap2 "resources/q.bmp", 16, 16
 
-bmpUn:   	insert_bitmap2 "resources/un.bmp", 16, 16
 bmpB:    	insert_bitmap2 "resources/b.bmp",  16, 16
+
+bmpUn:   	insert_bitmap2 "resources/un.bmp", 16, 16
 bmp0:    	insert_bitmap2 "resources/0.bmp",  16, 16
 bmp1:    	insert_bitmap2 "resources/1.bmp",  16, 16
 bmp2:    	insert_bitmap2 "resources/2.bmp",  16, 16
