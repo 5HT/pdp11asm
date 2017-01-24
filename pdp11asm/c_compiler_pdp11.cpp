@@ -408,9 +408,8 @@ void CompilerPdp11::compileVar(Node* n, unsigned d, IfOpt* ifOpt)
         {
             NodeReturn* r = n->cast<NodeReturn>();
             if(d != 0) throw std::runtime_error("return !d");
-            if(r->var) compileVar(r->var, 0);
-            if(curFn->stackSize != 0) out.cmd(cmdAdd, Arg11(atValue, 0, curFn->stackSize), Arg11::sp);
-            out.ret();
+            if(r->var) compileVar(r->var, 0);            
+            if(curFn->stackSize != 0) out.cmd(cmdBr, returnLabel); else out.ret();
             return;
         }
 
@@ -707,25 +706,25 @@ void CompilerPdp11::compileVar(Node* n, unsigned d, IfOpt* ifOpt)
                     case oSShl: o = oShl; s = 1; break;
                     case oSShr: o = oShr; s = 1; break;
                 }
-                char sf = r->dataType.isSigned() ? 'I' : 'U';
+                bool sf1 = r->dataType.isSigned();
                 if(d==1) pushAcc(pf);
                 compileVar(r->a, 0); //! Можно не вычислять два раза для S
                 compileVar(r->b, 1);
                 switch(o | pp)
                 {
-                    case oDiv | B:  out.call(sf ? "DIVBI" : "DIVBU"); break;
-                    case oMod | B:  out.call(sf ? "MODBI" : "MODBU"); break;
-                    case oMul | B:  out.call(sf ? "MULBI" : "MULBU"); break;
+                    case oDiv | B:  out.call(sf1 ? "DIVBI" : "DIVBU"); break;
+                    case oMod | B:  out.call(sf1 ? "MODBI" : "MODBU"); break;
+                    case oMul | B:  out.call(sf1 ? "MULBI" : "MULBU"); break;
                     case oShl | B:  out.call("SHLB"); break;
                     case oShr | B:  out.call("SHRB"); break;
-                    case oDiv | W:  out.call(sf ? "DIVWI" : "DIVWU"); break;
-                    case oMod | W:  out.call(sf ? "MODWI" : "MODWU"); break;
-                    case oMul | W:  out.call(sf ? "MULWI" : "MULWU"); break;
+                    case oDiv | W:  out.call(sf1 ? "DIVWI" : "DIVWU"); break;
+                    case oMod | W:  out.call(sf1 ? "MODWI" : "MODWU"); break;
+                    case oMul | W:  out.call(sf1 ? "MULWI" : "MULWU"); break;
                     case oShl | W:  out.call("SHLW"); break;
                     case oShr | W:  out.call("SHRW"); break;
-                    case oDiv | D:  out.call(sf ? "DIVDI" : "DIVDU"); break;
-                    case oMod | D:  out.call(sf ? "MODDI" : "MODDU"); break;
-                    case oMul | D:  out.call(sf ? "MULDI" : "MULDU"); break;
+                    case oDiv | D:  out.call(sf1 ? "DIVDI" : "DIVDU"); break;
+                    case oMod | D:  out.call(sf1 ? "MODDI" : "MODDU"); break;
+                    case oMul | D:  out.call(sf1 ? "MULDI" : "MULDU"); break;
                     case oShl | D:  out.call("SHLD"); break;
                     case oShr | D:  out.call("SHRD"); break;
                     default: throw std::runtime_error("int1");
@@ -822,6 +821,12 @@ void CompilerPdp11::compileVar(Node* n, unsigned d, IfOpt* ifOpt)
         case ntIf:
         {
             NodeIf* r = n->cast<NodeIf>();
+            if(r->f==0 && r->t && r->t->nodeType==ntJmp && r->t->cast<NodeJmp>()->cond==0)
+            {
+                compileJump(r->cond, 0, true, r->t->cast<NodeJmp>()->label->n1);
+                return;
+            }
+
             unsigned falseLabel = out.labelsCnt++;
             compileJump(r->cond, 0, false, falseLabel);
             compileBlock(r->t);
@@ -858,24 +863,25 @@ void CompilerPdp11::shift(const Arg11& al, const Arg11& ah, const Arg11& bl, boo
         Cmd11a c2;
         unsigned v = bl.value;
         uint32_t m;
+        bool use_add;
         switch(pf)
         {
-            case 'B': v = (v %  8); c1 =  (r ? cmdRorb : cmdRolb); c2 = cmdBicb; m = 0xFF; break;
-            case 'W': v = (v % 16); c1 =  (r ? cmdRor  : cmdRol ); c2 = cmdBic;  m = 0xFFFF; break;
-            case 'D': v = (v % 32); c1 =  (r ? cmdRor  : cmdRol ); c2 = cmdBic;  m = 0xFFFFFFFF; break;
+            case 'B': v = (v %  8); c1 =  (r ? cmdRorb : cmdRolb); c2 = cmdBicb; use_add = !r && al.type==atReg; m = 0xFF; break;
+            case 'W': v = (v % 16); c1 =  (r ? cmdRor  : cmdRol ); c2 = cmdBic;  use_add = !r; m = 0xFFFF; break;
+            case 'D': v = (v % 32); c1 =  (r ? cmdRor  : cmdRol ); c2 = cmdBic;  use_add = false; m = 0xFFFFFFFF; break;
         }
         if(v == 0) return;
         if(v == 1) out.clc();
         for(unsigned i=v; i>0; i--)
         {
             if(r && pf=='D') out.cmd(c1, ah);
-            out.cmd(c1, al);
+            if(use_add) out.cmd(cmdAdd, al, al); else out.cmd(c1, al);
             if(!r && pf=='D') out.cmd(c1, ah);
         }
         if(v != 1)
         {
             m = r ? (m >> v) : (m << v);
-            out.cmd(c2, Arg11(atValue, 0, 0xFFFF ^ (m & 0xFFFF)), al);
+            if(!use_add) out.cmd(c2, Arg11(atValue, 0, 0xFFFF ^ (m & 0xFFFF)), al);
             if(pf=='D') out.cmd(c2, Arg11(atValue, 0, 0xFFFF ^ (m >> 16)), ah);
         }
         return;
@@ -895,7 +901,7 @@ void CompilerPdp11::compileBlock(Node* n)
 
 void CompilerPdp11::compileFunction(Function* f)
 {
-    if(f->compiled || !f->rootNode) return;
+    if(f->compiled || !f->parsed) return;
 
     out.c.lstWriter.remark(out.c.out.writePtr, 1, f->name);
     compiler.addLabel(f->name);
@@ -907,11 +913,20 @@ void CompilerPdp11::compileFunction(Function* f)
 
     out.step0();
     out.labelsCnt = f->labelsCnt;
-    compileBlock(f->rootNode);
+    returnLabel = out.labelsCnt++;
+    compileBlock(f->root);
+    out.addLocalLabel(returnLabel);
+    // Тут может уже быть RET или JMP сюда же
+    if(f->stackSize) out.cmd(cmdAdd, Arg11(atValue, 0, f->stackSize), Arg11::sp); //! Использовать POP
+    out.ret();
 
     out.step1();
     out.labelsCnt = f->labelsCnt;
-    compileBlock(f->rootNode);
+    returnLabel = out.labelsCnt++;
+    compileBlock(f->root);
+    out.addLocalLabel(returnLabel);
+    if(f->stackSize) out.cmd(cmdAdd, Arg11(atValue, 0, f->stackSize), Arg11::sp); //! Использовать POP
+    out.ret();
 
     out.step2();
 
@@ -935,11 +950,15 @@ void CompilerPdp11::start(unsigned step)
 
         for(std::list<C::GlobalVar>::iterator i=tree.globalVars.begin(); i!=tree.globalVars.end(); i++) // МОжно начинать не с начала
         {
-            if(!i->compiled)
+            if(!i->compiled && !i->extren1)
             {
                 i->compiled = true;
-                compiler.addLabel(i->name);
-                if(i->data.size()>0) compiler.out.write(&i->data[0], i->data.size());
+                if(!i->type.is8()) compiler.out.align2(); //!!!! Добавить const char[]
+                compiler.addLabel(i->name); //! Вывести предупреждение о дубликате
+                if(i->data.size()>0)
+                {
+                    compiler.out.write(&i->data[0], i->data.size());
+                }
             }
         }
 

@@ -27,6 +27,7 @@ public:
 
     Function* curFn;
     unsigned  inStack;
+    unsigned  returnLabel;
 
     CompilerPdp11(Compiler& _compiler, Tree& _world);
     void pushAcc(char pf);

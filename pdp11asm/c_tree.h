@@ -228,15 +228,16 @@ namespace C
         std::string              needInclude;
         int                      addr;
         unsigned                 stackSize;
-        Node*                    rootNode;
+        Node*                    root;
+        bool                     parsed;
         bool                     compiled;
         unsigned                 labelsCnt;
         unsigned                 call_type;
         unsigned                 call_arg;
         unsigned                 reg;
 
-        Function() { compiled=false; rootNode=0; addr=0; stackSize=0; labelsCnt=0; call_type=0; reg=0; }
-        ~Function() { delete rootNode; }
+        Function() { compiled=false; parsed=false; root=0; addr=0; stackSize=0; labelsCnt=0; call_type=0; reg=0; }
+        ~Function() { delete root; }
     };
 
     class NodeCall : public NodeVar {

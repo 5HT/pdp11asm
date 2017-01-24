@@ -38,7 +38,7 @@ public:
 
     inline bool regUsed()
     {
-        return (type == atReg || type == atRegMem || type == atRegValueMem) && reg != 6;
+        return (type == atReg || type == atRegMem || type == atRegValueMem || type == atRegValueMemMem) && reg != 6;
     }
 
     Arg11(Arg11Type _type, unsigned _reg, unsigned _value, std::string _str) : type(_type), reg(_reg), value(_value), str(_str) {}

@@ -202,7 +202,7 @@ void treePrepare(Function* f)
 {
     TreePrepare p;
     p.prepare_arg = f->stackSize;
-    p.prepare(f->rootNode);
+    p.prepare(f->root);
     f->labelsCnt = p.labelsCnt;
 }
 

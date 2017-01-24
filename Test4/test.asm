@@ -8,7 +8,7 @@ ORG 01000
 ;----------------------------------------------------------------------------        
 
 EntryPoint:
-    MOV #16384, SP
+    MOV #3FFEh, SP
     MOV #main, PC
 
 ;----------------------------------------------------------------------------
@@ -16,9 +16,8 @@ EntryPoint:
 SHLW:
     BIC #0FFF0h, R1
     BEQ SHLW1
-    CLC
 SHLW2:
-    ROL R0
+    ADD R0, R0
     SOB R1, SHLW2
 SHLW1:
     RTS PC
@@ -28,8 +27,8 @@ SHLW1:
 SHRW:
     BIC #0FFF0h, R1
     BEQ SHRW1
-    CLC
 SHRW2:
+    CLC
     ROR R0
     SOB R1, SHRW2
 SHRW1:
@@ -59,14 +58,36 @@ SGNB0R:
     RTS PC
 
 ;----------------------------------------------------------------------------
+; ДЕЛЕНИЕ
+; R0/R1
 
-DIVWI:
-MODWI:
-MULWI:
-GOTOXY:
-PUTTEXT:
-PUTC:
-    RET
+DIVWU:
+    CLR R5
+DIVWU1:
+    SUB R1, R0
+    BCS DIVWU2
+    INC R5
+    BR DIVWU1
+DIVWU2:
+    ADD R1, R0
+    MOV R0, MOD_DIV
+    MOV R5, R0
+    RTS PC
+
+MOD_DIV: DW 0
+
+;----------------------------------------------------------------------------
+; void drawb(void* d @ r1, void* s @ r0, uint16_t w @ r2, uint16_t h @ r3);
+
+drawb:
+    MOV R1, R4
+    MOV R2, R5
+drawb1:
+    MOVB (R0)+,(R4)+
+    SOB R5, drawb1
+    ADD #64., R1
+    SOB R3, drawb
+    RTS PC
 
 ;----------------------------------------------------------------------------
 ; void draw(void* d @ r1, void* s @ r0, uint16_t w @ r2, uint16_t h @ r3);
@@ -75,14 +96,15 @@ draw:
     MOV R1, R4
     MOV R2, R5
 draw1:
-    MOVB (R0)+,(R4)+
+    MOV (R0)+,(R4)+
+    MOV (R0)+,(R4)+
     SOB R5, draw1
     ADD #64., R1
     SOB R3, draw
     RTS PC
 
 ;----------------------------------------------------------------------------
-; void draw(void* d @ r1, void* s @ r0, uint16_t w @ r2, uint16_t h @ r3);
+; void drawa(void* d @ r1, void* s @ r0, uint16_t w @ r2, uint16_t h @ r3);
 
 drawa:
     MOV R1, R4
@@ -108,41 +130,44 @@ CLEARSCREEN1:
     SOB R1, CLEARSCREEN1
     RTS PC
 
+;----------------------------------------------------------------------------
+
 {
 
 // BIOS
 
-uint8_t getc() @ emt 6;
-void putc(char c @ r0) @ emt 016;
-void gotoxy(uint16_t x @ r1, uint16_t y @ r2) @ emt 024;
+uint8_t     getc() @ emt 6;
+void        putc(char c @ r0) @ emt 016;
+void        gotoxy(uint16_t x @ r1, uint16_t y @ r2) @ emt 024;
 const char* puttext(const char* @ r1, uint16_t flags @ r2) @ emt 020, r1;
-uint16_t displaystatus() @ emt 034;
+uint16_t    displaystatus() @ emt 034;
 
 // ASM
 
 extern uint16_t mod_div;
-void draw(void* d @ r1, void* s @ r0, uint16_t w @ r2, uint16_t h @ r3);
+void draw (void* d @ r1, void* s @ r0, uint16_t w @ r2, uint16_t h @ r3);
 void drawa(void* d @ r1, void* s @ r0, uint16_t w @ r2, uint16_t h @ r3);
+void drawb(void* d @ r1, void* s @ r0, uint16_t w @ r2, uint16_t h @ r3);
 
 // C
 
-uint8_t  rand();
-void startGame();
-void clearScreen();
-void print(const char*);
-void fillBlocks();
-void drawSmile(void*);
-void drawPlayField();
-void leftNumber();
-void rightNumber();
-void hideCursor();
-void drawCursor();
-void putBombs();
-void open(unsigned x, unsigned y);
-void checkWin();
-void* callCell2(unsigned x, unsigned y);
-void* getBitmap(uint8_t n);
-void redrawCell012(unsigned x, unsigned y);
+uint8_t rand();
+void    startGame();
+void    clearScreen();
+void    print(const char*);
+void    fillBlocks();
+void    drawSmile(void*);
+void    drawPlayField();
+void    leftNumber();
+void    rightNumber();
+void    hideCursor();
+void    drawCursor();
+void    putBombs();
+void    open(unsigned x, unsigned y);
+void    checkWin();
+void*   callCell2(unsigned x, unsigned y);
+void*   getBitmap(uint8_t n);
+void    redrawCell012(unsigned x, unsigned y);
 
 uint16_t gameWidth    = 0;
 uint16_t gameHeight   = 0;
@@ -155,11 +180,10 @@ uint16_t playfieldVA  = 0;
 uint16_t bombsCnt     = 0;
 uint16_t bombsPutted  = 0;
 uint16_t time         = 0;
-uint16_t lastTimer    = 0;
+uint8_t  lastTimer    = 0;
 uint8_t  playfield[256];
-uint8_t  userMarks[256];
 
-extern void bmpLogo[];
+extern void    bmpLogo[];
 extern uint8_t bmpGood[];
 extern uint8_t bmpWin[];
 extern uint8_t bmpBad[];
@@ -180,14 +204,7 @@ const char txtMenu[] =
     "\x0A\x0E" "2. Hijkl\x00"
     "\x0A\x0F" "3. Mnopqr\x00"
     "\x0C\x16" "\x91(c) 2012\x00"
-    "\x03\x17" "\x93aleksey.f.morozov@gmail.com\x00";
-
-uint16_t menuItems[] = {
-    9, 9, 3, 21006, // ширина, высота, кол-во бомб, положение на экране
-    9, 9, 10, 21006,
-    13, 10, 20, 20486,
-    16, 14, 43, 18432
-};
+    "\x03\x17" "\x93aleksey.f.morozov@gmail.com\x00\x00";
 
 void puttext2(const char* a)
 {
@@ -202,6 +219,7 @@ void puttext2(const char* a)
 
 uint8_t getc2()
 {
+    if((*(uint8_t*)0177660 & 128) == 0) return 0; // Нажата ли клавиша
     return (*(uint8_t*)0177660 & 128) ? *(uint8_t*)0177662 : 0;
 }
 
@@ -219,7 +237,7 @@ void main()
     for(;;)
     {
         clearScreen();
-        draw((void*)045020, bmpLogo, 32, 32);
+        draw((void*)045020, bmpLogo, 8, 32);
         puttext2(txtMenu);
         for(;;)
         {
@@ -250,7 +268,7 @@ void startGame()
         uint8_t* a = (uint8_t*)(040000 + 64*16*2);
         for(y=0; y<14; y++, a+=64*15)
             for(x=0; x<16; x++, a+=4)
-                draw(a, bmpBlock, 4, 16);
+                draw(a, bmpBlock, 1, 16);
     }
 
     // Очистка основных переменных
@@ -265,7 +283,6 @@ void startGame()
         do
         {
             playfield[i] = 0;
-            userMarks[i] = 0;
             i++;
         } while(i != 256);
     }
@@ -286,23 +303,20 @@ void startGame()
 
         if(!gameOverFlag && time!=999)
         {
-//    		; Прошла секунда?
-//    		CLR R0
-//    		CMP @#0177710, #365
-//    		ADC R0
-//    		CMP lastTimer, R0
-//    		BEQ mainLoop1
-//    		MOV R0, lastTimer
+            uint8_t t = *(uint16_t*)0177710 > 365;
+            if(t != lastTimer)
+            {
+                lastTimer = t;
     		time++;
-            rightNumber();
+                rightNumber();
+            }
         }
 
-        // Нажата ли клавиша
-        if((*(uint8_t*)0177660 & 128) == 0) continue;
-
-		// Анализируем клавиатуру
-        switch(*(uint8_t*)0177662)
+	// Анализируем клавиатуру
+        switch(getc2())
         {
+            case 0:
+                break;
             case 8:
                 if(cursorX==0) continue;
                 hideCursor();
@@ -329,13 +343,18 @@ void startGame()
                 drawCursor();
                 break;
             case ' ':
+                if(gameOverFlag) return;
                 if(!bombsPutted) putBombs();
             	open(cursorX, cursorY);
                 continue;
             default:
-                if(gameOverFlag) continue;
-                uint8_t* a = &userMarks[(cursorY << 4) + cursorX];
-                *a = *a==2 ? 0 : *a+1;
+                if(gameOverFlag) return;
+                uint8_t* a = &playfield[(cursorY << 4) + cursorX];
+                uint8_t v = *a;
+                if((v & 0x7F) > 2) continue;
+                v++;
+                if((v & 0x7F) == 3) v = v - 3;
+                *a = v;
                 hideCursor();
             	drawCursor();
                 leftNumber();
@@ -363,7 +382,6 @@ void putBombs()
         *a = 0x80;
         bc--;
     }
-//    drawPlayField();
 }
 
 uint16_t calcCell2(uint16_t x, uint16_t y)
@@ -381,73 +399,87 @@ void drawCursor()
     drawa(calcCell2(cursorX, cursorY), bmpCursor, 2, 16);
 }
 
-unsigned get(unsigned x, unsigned y)
+unsigned open_x, open_y, open_n;
+uint8_t* open_a;
+
+void open_check()
 {
-    if(x >= gameWidth || y >= gameHeight) return 0;
-    if(playfield[(y << 4) + x] == 0x80) return 1;
-    return 0;
+    if(open_x < gameWidth && open_y < gameHeight && (*open_a & 0x80) != 0) open_n++;
 }
 
-unsigned mget(unsigned x, unsigned y)
+void open_int()
 {
-    unsigned n = 1;
-    n += get(x-1,y-1);
-    n += get(x,y-1);
-    n += get(x+1,y-1); 
-    n += get(x-1,y);
-    n += get(x+1,y); 
-    n += get(x-1,y+1);
-    n += get(x,y+1);
-    n += get(x+1,y+1);
-    playfield[(y << 4) + x] = n;
-    return n;
+    if(open_x >= gameWidth || open_y >= gameHeight) return;
+    if(*open_a & 0x80)
+    {
+        gameOverFlag = 1;
+        return;
+    }
+    if(*open_a != 0) return;
+    open_n = 3;
+    open_x--; open_y--; open_a -= 17;
+    open_check(); open_x++;  open_a++;
+    open_check(); open_x++;  open_a++;
+    open_check(); open_y++;  open_a+=16;
+    open_check(); open_x-=2; open_a-=2;
+    open_check(); open_y++;  open_a+=16;
+    open_check(); open_x++;  open_a++;
+    open_check(); open_x++;  open_a++;
+    open_check();
+    open_x--; open_y--; open_a -= 17;
+    *open_a = open_n;
+    if(open_n == 3)
+    {
+        open_x--; open_y--;  open_a-=17;
+        open_int();  open_x++;  open_a++;
+        open_int();  open_x++;  open_a++;
+        open_int();  open_y++;  open_a+=16;
+        open_int();  open_x-=2; open_a-=2;
+        open_int();  open_y++;  open_a+=16;
+        open_int();  open_x++;  open_a++;
+        open_int();  open_x++;  open_a++;
+        open_int();
+        open_x--;  open_y--; open_a -= 17;
+    }
+    redrawCell012(open_x, open_y);
 }
 
 void open(unsigned x, unsigned y)
 {
-//    if(gameOverFlag) return;
-    if(x >= gameWidth || y >= gameHeight) return;
-    uint8_t a = playfield[(y << 4) + x];
-    if(a == 0x80)
+    hideCursor();
+    open_x = x;
+    open_y = y;
+    open_a = &playfield[(y << 4) + x];
+    open_int();
+    drawCursor();
+    if(gameOverFlag)
     {
         drawSmile(bmpBad);
-        gameOverFlag = 1;
-	drawPlayField();
+        drawPlayField();
     }
     else
-    if(a == 0)
-    {   
-	if(mget(x,y) == 1)
-	{
-	    open(x-1,y-1);
-	    open(x,y-1);
-	    open(x+1,y-1);
-	    open(x-1,y);
-	    open(x+1,y);
-	    open(x-1,y+1);
-	    open(x,y+1);
-	    open(x+1,y+1);
-	}
-        redrawCell012(x, y);
-    }
-    drawCursor();
-//    checkWin();
-}
+    {
+        uint8_t* a = playfield;
+        for(y=0; y<gameHeight; y++, a+=16, a-=gameWidth)
+            for(x=0; x<gameWidth; x++, a++)
+                if(*a == 0)
+                    return;
 
-//die:		; Вывод смайлика
-//		MOV #bmpBad, R0
-//		JSR PC, @#drawSmile
-//		JMP @#gameOver
+        drawSmile(bmpWin);
+        gameOverFlag = 1;
+        drawPlayField();
+    }
+}
 
 void* getBitmap(uint8_t n)
 {
-    if(n & 0x80) return gameOverFlag ? bmpB : bmpUn;
-    return (((uint16_t)n)<<6) + bmpUn;
+    if((n & 0x80) != 0 && gameOverFlag) return bmpB;
+    return (((uint16_t)(n & 0x7F))<<6) + bmpUn;
 }
 
 void redrawCell012(unsigned x, unsigned y)
 {
-    draw(calcCell2(x,y), getBitmap(playfield[(y<<4)+x]), 4, 16);
+    draw(calcCell2(x,y), getBitmap(playfield[(y<<4)+x]), 1, 16);
 }
 
 uint8_t rand_state = 0xFA;
@@ -458,37 +490,29 @@ uint8_t rand()
     return rand_state;
 }
 
-void checkWin()
-{
-    unsigned a = 0;
-    for(a=0; a<256; a++)
-        if(playfield[a] == 254)
-            return;
-
-    drawSmile(bmpWin);
-    gameOverFlag = 1;
-    drawPlayField();
-}
-
 void drawNumber(uint8_t* d, uint16_t n)
 {
     uint8_t c=3;
     do
     {
-    //    n /= 10;
-    //    draw(d, bmpN0 + mod_div*64, 3, 21);
-        draw(d, bmpN0, 3, 21);
+        n = n / (uint16_t)10;
+        drawb(d, bmpN0 + (mod_div << 6), 3, 21);
         d -= 3;
     } while(--c);
 }
 
 void leftNumber()
 {
-    unsigned c=0, b=bombsCnt;
-    do
+    unsigned i, b = bombsCnt;
+    uint8_t* a;
+    for(i=256, a=playfield; i!=0; i--, a++)
     {
-        if(userMarks[c] == 1) b--;
-    } while(b!=0 && ++c);
+        if((*a & 0x7F) == 1)
+        {
+            if(b==0) break;
+            b--;
+        }
+    }
     drawNumber((void*)040510, b);
 }
 
@@ -502,7 +526,7 @@ void rightNumber()
 
 void drawSmile(void* img)
 {
-    draw((void*)040435, img, 6, 24);
+    drawb((void*)040435, img, 6, 24);
 }
 
 //----------------------------------------------------------------------------
@@ -528,7 +552,7 @@ drawTransImag1:	BIC     (R0)+, (R1)
     BIS     (R0)+, (R1)+
     BIC     (R0)+, (R1)
     BIS     (R0)+, (R1)+
-    ADD     #60, R1                        
+    ADD     #60, R1
     SOB	    R2, drawTransImag1
     RTS     PC
 

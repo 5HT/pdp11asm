@@ -249,7 +249,7 @@ NodeVar* Parser::nodeOperator2(Type type, Operator o, NodeVar* a, NodeVar* b)
     }
 
     // Фича PDP
-    if(o == oAnd) b = nodeMonoOperator(b, moXor); //!!! Приоритет у константы или регистра (т.е. прошлое вычисление дало регистр)
+    if(o == oAnd || o==oSAnd) b = nodeMonoOperator(b, moXor); //!!! Приоритет у константы или регистра (т.е. прошлое вычисление дало регистр)
 
     return outOfMemory(new NodeOperator(type, o, a, b));
 }
@@ -1097,19 +1097,9 @@ Function* Parser::parseFunction(Type& retType, const std::string& name)
     p.needToken("{");
 
     curFn = f;
-    f->rootNode = readBlock();
+    f->root = readBlock();
+    f->parsed = true;
     curFn = 0;
-
-    if(!f->rootNode)
-    {
-        f->rootNode = new NodeReturn(0);
-    }
-    else
-    {
-        Node* n = f->rootNode;
-        while(n->next) n = n->next;
-        if(n->nodeType != ntReturn) n->next = new NodeReturn(0);
-    }
 
     return f;
 }
