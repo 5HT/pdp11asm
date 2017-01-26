@@ -56,8 +56,9 @@ void CompilerPdp11::popAcc_A2D(char pf)
 
 //---------------------------------------------------------------------------------------------------------------------
 
-bool CompilerPdp11::compileArg(Arg11& ol, Arg11& oh, NodeVar* a, int d, int dr, char pf)
+bool CompilerPdp11::compileArg(bool check, Arg11& ol, Arg11& oh, NodeVar* a, int d, int dr, char pf)
 {
+    //! Игнор в том числе signed!
     while(a->nodeType == ntConvert && a->dataType.addr!=0 && ((NodeConvert*)a)->var->dataType.addr!=0)
         a = ((NodeConvert*)a)->var;
 
@@ -147,6 +148,7 @@ bool CompilerPdp11::compileArg(Arg11& ol, Arg11& oh, NodeVar* a, int d, int dr, 
                         return false;
                     }
                     // Оптимизация Deaddr(Add(Const,REG)) одной командой
+                    if(check) return true;
                     if(d==0 && dr==1) pushAcc(pf);
                     compileVar(e->b, d);
                     ol.type = dbl ? atRegValueMemMem : atRegValueMem;
@@ -176,6 +178,7 @@ bool CompilerPdp11::compileArg(Arg11& ol, Arg11& oh, NodeVar* a, int d, int dr, 
         //! Двойной адрес
 
         // Оптимизация Deaddr(REG) одной командой
+        if(check) return true;
         if(d==0 && dr==1) pushAcc(pf);
         compileVar(b, d);
         ol.type  = dbl ? atRegValueMemMem : atRegMem;
@@ -188,6 +191,7 @@ bool CompilerPdp11::compileArg(Arg11& ol, Arg11& oh, NodeVar* a, int d, int dr, 
     }
 
     // Без оптимизации
+    if(check) return true;
     if(d==0 && dr==1) pushAcc(pf);
     compileVar(a, d);
     ol.type = atReg;
@@ -225,6 +229,48 @@ static inline char bwd(Type& dataType)
 
 //---------------------------------------------------------------------------------------------------------------------
 
+bool CompilerPdp11::compileDualArg(Arg11& al, Arg11& ah, Arg11& bl, Arg11& bh, bool s, unsigned d, NodeOperator* r, char pf)
+{
+    bool pop = false;
+    bool firstRegUsed  = compileArg(true, al, ah, r->a, 0, 0, pf);
+    bool secondRegUsed = compileArg(true, bl, bh, r->b, 0, 0, pf);
+
+    // Аргумент, который мы собираемся поместить во временный регистр полностью помещается в аргумент.
+    // А тот, что планировали поместить в аргумент все равно использует временный регистр. Выгоднее поменять местами.
+
+    if(out.step==0 && !firstRegUsed && secondRegUsed)
+    {
+        if(r->o == oAdd || r->o == oOr || r->o == oXor )
+        {
+            std::swap(secondRegUsed, firstRegUsed);
+            std::swap(r->a, r->b);
+        }
+    }
+
+    unsigned d1 = d==1 && !secondRegUsed ? 1 : 0; // Если для вычисления требуется всего один регистр и результат должен быть в B, то сразу в B
+    if(s)
+    {
+        pop = compileArg(false, al, ah, r->a, d1, d, pf); //! для oSet аккумулятор долежн содержать устанаввиваемое значение
+    }
+    else
+    {
+        if(d1==0 && d==1)
+        {
+            pushAcc(pf);
+            pop = true;
+        }
+        compileVar(r->a, d1);
+        al.type = atReg;
+        al.reg  = d1;
+        ah.type = atReg;
+        ah.reg  = d1+2;
+    }
+    compileArg(false, bl, bh, r->b, d==0 && !al.regUsed() ? 0 : 1, d, pf); // Если R0 не занят, занять его!
+    return pop;
+}
+
+//---------------------------------------------------------------------------------------------------------------------
+
 void CompilerPdp11::compileVar(Node* n, unsigned d, IfOpt* ifOpt)
 {
 //    printf("---%u\n", n->nodeType);
@@ -252,7 +298,7 @@ void CompilerPdp11::compileVar(Node* n, unsigned d, IfOpt* ifOpt)
             if(c->dataType.is32()) pf='D'; else throw std::runtime_error("monoOperator !stack");
 
             Arg11 al, ah;
-            compileArg(al, ah, c, d, d, pf);
+            compileArg(false, al, ah, c, d, d, pf);
 
             out.cmd(cmdMov, al, Arg11(atReg, d));
             if(pf=='D') out.cmd(cmdMov, ah, Arg11(atReg, d+2));
@@ -308,7 +354,7 @@ void CompilerPdp11::compileVar(Node* n, unsigned d, IfOpt* ifOpt)
                 if(i->reg) { regs_founded++; continue; }
                 NodeVar* v = c->args1[i->n];
                 Arg11 al,ah;
-                compileArg(al,ah,v,0,0,bwd(v->dataType));
+                compileArg(false, al,ah,v,0,0,bwd(v->dataType));
                 if(v->dataType.is8()) { ss+=2; inStack+=2; out.pushb(al); } else //! Может в PUSH затолкнуть?
                 if(v->dataType.is16()) { ss+=2; inStack+=2; out.push(al); } else
                 if(v->dataType.is32()) { ss+=4; inStack+=4; out.push(ah); out.push(al); } else throw std::runtime_error("call !stack");
@@ -324,7 +370,7 @@ void CompilerPdp11::compileVar(Node* n, unsigned d, IfOpt* ifOpt)
                     regs_founded--;
                     NodeVar* v = c->args1[i->n];
                     Arg11 al,ah;
-                    compileArg(al,ah,v,0,0,bwd(v->dataType));
+                    compileArg(false, al,ah,v,0,0,bwd(v->dataType));
                     if(!v->dataType.is8_16()) throw std::runtime_error("call !stack");
                     if(regs_founded==0) out.cmd(v->dataType.is8() ? cmdMovb : cmdMov, al, Arg11(atReg, i->reg-1)); else { ss+=2; inStack+=2; out.push(al); }
                 }
@@ -376,7 +422,7 @@ void CompilerPdp11::compileVar(Node* n, unsigned d, IfOpt* ifOpt)
             if(c->dataType.is32()) pf='D'; else throw std::runtime_error("monoOperator !stack");
 
             Arg11 al, ah;
-            compileArg(al, ah, c, d, d, pf);
+            compileArg(false, al, ah, c, d, d, pf);
 
             // Результат уже в нужном регистре
             if(al.type != atReg || al.reg != d) out.cmd(pf=='B' ? cmdMovb : cmdMov, al, Arg11(atReg, d));
@@ -457,7 +503,7 @@ void CompilerPdp11::compileVar(Node* n, unsigned d, IfOpt* ifOpt)
             if(o->o==moIncVoid || o->o==moDecVoid) // На входе адрес, на выходе значение
             {
                 Arg11 al, ah;
-                compileArg(al, ah, o->a, d, d, pf);
+                compileArg(false, al, ah, o->a, d, d, pf);
                 switch(o->o | pp)
                 {
                     case B | moIncVoid: if(s==1) out.cmd(cmdIncb, al); else out.cmd(cmdAdd, Arg11(atValue, 0, s), al); return;
@@ -476,7 +522,7 @@ void CompilerPdp11::compileVar(Node* n, unsigned d, IfOpt* ifOpt)
                 if(o->a->nodeType != ntDeaddr) throw std::runtime_error("monoOperator !deaddr (%u)" + i2s(o->a->nodeType));
 
                 Arg11 al, ah;
-                compileArg(al, ah, o->a, d, d, pf);
+                compileArg(false, al, ah, o->a, d, d, pf);
                 bool au = al.regUsed();
 
                 if(pf=='B')
@@ -608,29 +654,12 @@ void CompilerPdp11::compileVar(Node* n, unsigned d, IfOpt* ifOpt)
                 return;
             }
 
-            if(((r->o == oShr || r->o==oShl) && r->b->nodeType==ntConstI) ||  r->o==oAdd || r->o==oSub || r->o==oAnd || r->o==oOr || r->o==oXor || r->o==oSAdd || r->o==oSSub || r->o==oSAnd || r->o==oSOr || r->o==oSXor || r->o==oSetVoid || r->o==oSet)
+            if(((r->o == oShr || r->o==oShl || r->o == oSShr || r->o==oSShl) && can_shift(r)) ||  r->o==oAdd || r->o==oSub || r->o==oAnd || r->o==oOr || r->o==oXor || r->o==oSAdd || r->o==oSSub || r->o==oSAnd || r->o==oSOr || r->o==oSXor || r->o==oSetVoid || r->o==oSet)
             {
-                bool s = r->o==oSAdd || r->o==oSSub || r->o==oSAnd || r->o==oSOr || r->o==oSXor || r->o==oSetVoid || r->o==oSet;
+                bool s = r->o==oSAdd || r->o==oSSub || r->o==oSAnd || r->o==oSOr || r->o==oSXor || r->o==oSetVoid || r->o == oSShr || r->o==oSShl || r->o==oSet;
+
                 Arg11 al, ah, bl, bh;
-                bool pop = false;
-                if(s)
-                {
-                    pop = compileArg(al, ah, r->a, 0, d, pf); //! для oSet аккумулятор долежн содержать устанаввливаемое значение
-                }
-                else
-                {
-                    if(d==1)
-                    {
-                        pushAcc(pf);
-                        pop = true;
-                    }
-                    compileVar(r->a, 0);
-                    al.type = atReg;
-                    al.reg = 0;
-                    ah.type = atReg;
-                    ah.reg = 2;
-                }
-                compileArg(bl, bh, r->b, d==0 && !al.regUsed() ? 0 : 1, d, pf); // Если R0 не занят, занять его!
+                bool pop = compileDualArg(al, ah, bl, bh, s, d, r, pf);
 
                 switch(r->o | pp)
                 {
@@ -647,9 +676,9 @@ void CompilerPdp11::compileVar(Node* n, unsigned d, IfOpt* ifOpt)
                     case B | oSXor:
                     case B | oXor:     if(bl.type==atReg) out.xor_r_a(bl.reg, al); else { out.cmd(cmdMov, bl, Arg11::r4); out.xor_r_a(4, al); } break; //!!! нет 8 бит
                     case B | oSet:
-                    case B | oSetVoid: if(bl.type == atValue && bl.value == 0 && bl.str.empty()) out.cmd(cmdClrb, al); else out.cmd(cmdMovb, bl, al); break;
-                    case B | oShl:     shift(al, ah, bl, false, pf); break;
-                    case B | oShr:     shift(al, ah, bl, true, pf); break;
+                    case B | oSetVoid: out.cmd(cmdMovb, bl, al); break;
+                    case B | oShl:     shift(al, ah, bl, true, pf); break;
+                    case B | oShr:     shift(al, ah, bl, false, pf); break;
 
                     case W | oSAdd:
                     case W | oAdd:     out.cmd(cmdAdd, bl, al); break;
@@ -660,11 +689,11 @@ void CompilerPdp11::compileVar(Node* n, unsigned d, IfOpt* ifOpt)
                     case W | oSOr:
                     case W | oOr:      out.cmd(cmdBis, bl, al); break;
                     case W | oSXor:
-                    case W | oXor:     if(bl.type==atReg) out.xor_r_a(bl.reg, al); else { out.cmd(cmdMov, bl, Arg11::r4); out.xor_r_a(4, al); } break;
+                    case W | oXor:     if(bl.type==atReg) out.xor_r_a(bl.reg, al); else { out.cmd(cmdMov, bl, Arg11::r4); out.xor_r_a(4, al); } break; //! Можно XOR оптимизировать
                     case W | oSet:
-                    case W | oSetVoid: if(bl.type == atValue && bl.value == 0 && bl.str.empty()) out.cmd(cmdClr, al); else out.cmd(cmdMov, bl, al); break;
-                    case W | oShl:     shift(al, ah, bl, false, pf); break;
-                    case W | oShr:     shift(al, ah, bl, true, pf); break;
+                    case W | oSetVoid: out.cmd(cmdMov, bl, al); break;
+                    case W | oShl:     shift(al, ah, bl, true, pf); break;
+                    case W | oShr:     shift(al, ah, bl, false, pf); break;
 
                     case D | oSAdd:
                     case D | oAdd:     out.cmd(cmdAdd, bl, al); out.cmd(cmdAdc, ah); out.cmd(cmdAdd, bh, ah); break;
@@ -678,12 +707,10 @@ void CompilerPdp11::compileVar(Node* n, unsigned d, IfOpt* ifOpt)
                     case D | oXor:     if(al.type==atReg) out.xor_r_a(al.reg, bl); else { out.cmd(cmdMov, al, Arg11::r4); out.xor_r_a(4, bl); }
                                        if(ah.type==atReg) out.xor_r_a(ah.reg, bh); else { out.cmd(cmdMov, ah, Arg11::r4); out.xor_r_a(4, bh); }
                                        break;
-                    case D | oShl:     shift(al, ah, bl, false, pf); break;
-                    case D | oShr:     shift(al, ah, bl, true, pf); break;
+                    case D | oShl:     shift(al, ah, bl, true, pf); break;
+                    case D | oShr:     shift(al, ah, bl, false, pf); break;
                     case D | oSet:
-                    case D | oSetVoid: if(bl.type == atValue && bl.value == 0 && bl.str.empty()) out.cmd(cmdClr, al); else out.cmd(cmdMov, bl, al);
-                                       if(bh.type == atValue && bh.value == 0 && bh.str.empty()) out.cmd(cmdClr, ah); else out.cmd(cmdMov, bh, ah);
-                                       break;
+                    case D | oSetVoid: out.cmd(cmdMov, bl, al); out.cmd(cmdMov, bh, ah); break;
                     default: throw std::runtime_error("compile ntOperator cpu");
                 }
 
@@ -732,7 +759,7 @@ void CompilerPdp11::compileVar(Node* n, unsigned d, IfOpt* ifOpt)
                 if(s)
                 {
                     Arg11 al, ah;
-                    compileArg(al, ah, r->a, 1, 1, pf); //! Можно не вычислять два раза для S
+                    compileArg(false, al, ah, r->a, 1, 1, pf); //! Можно не вычислять два раза для S
                     if(pp == B) out.cmd(cmdMovb, Arg11::r0, al); else
                     if(pp == W) out.cmd(cmdMov, Arg11::r0, al); else
                     if(pp == D) { out.cmd(cmdMov, Arg11::r0, al);  out.cmd(cmdMov, Arg11::r2, ah); } else throw std::runtime_error("!stack");
@@ -745,12 +772,11 @@ void CompilerPdp11::compileVar(Node* n, unsigned d, IfOpt* ifOpt)
             {
                 if(pf=='D') throw std::runtime_error("compare 32");
                 Arg11 al, ah, bl, bh;
-                bool pop = compileArg(al, ah, r->a, 0, d, pf);
-                pop |= compileArg(bl, bh, r->b, d==0 && !al.regUsed() ? 0 : 1, d, pf);
 
+                bool pop = compileDualArg(al, ah, bl, bh, true, d, r, pf);
                 if(pf=='B') out.cmd(cmdCmpb, bl, al);
                        else out.cmd(cmdCmp, bl, al);
-                if(pop) popAcc(pf);
+                if(pop) popAcc(pf); //!!!! Портит флаги. //!!!! Вместо регистра R0 или R2 использовать (SP)+
 
                 Operator o = r->o;
 
@@ -851,42 +877,86 @@ void CompilerPdp11::compileVar(Node* n, unsigned d, IfOpt* ifOpt)
 }
 
 //---------------------------------------------------------------------------------------------------------------------
+// Компиляция команд сдвигов
 
-void CompilerPdp11::shift(const Arg11& al, const Arg11& ah, const Arg11& bl, bool r, char pf)
+bool CompilerPdp11::can_shift(NodeOperator* r)
 {
-    //! Использовать временный регистр
-    //! Использовать обмен байт SWAB, и сдвиг в другую сторону
-    //! Использовать ASL, ASR вместо MASK
-    if(bl.type == atValue && bl.str.empty())
+    if(r->b->nodeType != ntConstI) return false;
+    unsigned v = r->b->cast<NodeConst>()->value;
+    if(v == 0) return true; // Сдвиг не требуется
+    if(r->dataType.is8()) return true;
+    if(r->dataType.is16()) return true;
+    if(r->dataType.is32() && (v==1 || v==8 || v==16 || v==24)) return true;
+    return false;
+}
+
+void CompilerPdp11::shift(const Arg11& al, const Arg11& ah, const Arg11& bl, bool l, char pf)
+{    
+    //! Использовать временный регистр, если исрользуется несколько операций и AL-не регистр
+    if(bl.type != atValue || !bl.str.empty()) throw std::runtime_error("compiler shift8");
+    unsigned v = bl.value;
+    if(v == 0) return;
+
+    if(pf=='B')
     {
-        Cmd11b c1;
-        Cmd11a c2;
-        unsigned v = bl.value;
-        uint32_t m;
-        bool use_add;
-        switch(pf)
+        if(l)
         {
-            case 'B': v = (v %  8); c1 =  (r ? cmdRorb : cmdRolb); c2 = cmdBicb; use_add = !r && al.type==atReg; m = 0xFF; break;
-            case 'W': v = (v % 16); c1 =  (r ? cmdRor  : cmdRol ); c2 = cmdBic;  use_add = !r; m = 0xFFFF; break;
-            case 'D': v = (v % 32); c1 =  (r ? cmdRor  : cmdRol ); c2 = cmdBic;  use_add = false; m = 0xFFFFFFFF; break;
+            if(v <= 5) { for(unsigned i=0; i<v; i++) out.cmd(cmdAslb, al); return; }
+            if(v <= 7) { for(unsigned i=0; i<9-v; i++) out.cmd(cmdRorb, al); out.cmd(cmdBicb, Arg11(atValue, 0, ~(0xFF << v)), al); return; }
         }
-        if(v == 0) return;
-        if(v == 1) out.clc();
-        for(unsigned i=v; i>0; i--)
+        else
         {
-            if(r && pf=='D') out.cmd(c1, ah);
-            if(use_add) out.cmd(cmdAdd, al, al); else out.cmd(c1, al);
-            if(!r && pf=='D') out.cmd(c1, ah);
+            if(v == 1) { out.clc(); out.cmd(cmdRorb, al); return; }
+            if(v <= 4) { for(unsigned i=0; i<v; i++) out.cmd(cmdRorb, al); out.cmd(cmdBicb, Arg11(atValue, 0, ~(0xFF >> v)), al); return; }
+            if(v <= 7) { for(unsigned i=0; i<9-v; i++) out.cmd(cmdRolb, al); out.cmd(cmdBicb, Arg11(atValue, 0, ~(0xFF >> v)), al); return; }
         }
-        if(v != 1)
-        {
-            m = r ? (m >> v) : (m << v);
-            if(!use_add) out.cmd(c2, Arg11(atValue, 0, 0xFFFF ^ (m & 0xFFFF)), al);
-            if(pf=='D') out.cmd(c2, Arg11(atValue, 0, 0xFFFF ^ (m >> 16)), ah);
-        }
+        out.cmd(cmdClr, al); return;
         return;
     }
-    throw std::runtime_error("compiler shift8");
+
+    if(pf=='W')
+    {
+        //! Может быть двигать в другую сторону. Например RORB+RORB+AND аналогично сдвигу на 7
+        if(l)
+        {
+            if(v <= 7) { for(unsigned i=0; i<v; i++) out.cmd(cmdAsl, al); return; }
+            if(v <= 15) { out.cmd(cmdSwab, al); out.cmd(cmdClrb, al); for(unsigned i=8; i<v; i++) out.cmd(cmdAsl, al); return; }
+        }
+        else
+        {
+            if(v == 1) { out.clc(); out.cmd(cmdRor, al); return; }
+            if(v <= 7) { for(unsigned i=0; i<v; i++) out.cmd(cmdRor, al); out.cmd(cmdBic, Arg11(atValue, 0, ~(0xFFFF >> v)), al); return; }
+            if(v == 8) { out.cmd(cmdClrb, al); out.cmd(cmdSwab, al); return; }
+            if(v <= 15) { out.cmd(cmdSwab, al); for(unsigned i=8; i<v; i++) out.cmd(cmdRor, al); out.cmd(cmdBic, Arg11(atValue, 0, ~(0xFFFF >> v)), al); return; }
+        }
+        out.cmd(cmdClr, al);
+        return;
+    }
+
+    if(pf=='D')
+    {
+        //! Может быть двигать в другую сторону. Например RORB+RORB+AND аналогично сдвигу на 7
+        if(l)
+        {
+            if(v <= 15) { for(unsigned i=0; i<v; i++) { out.cmd(cmdAsl, al); out.cmd(cmdRol, ah); } return; }
+            if(v <= 23) { out.cmd(cmdMov, al, ah); out.cmd(cmdClr, al); for(unsigned i=16; i<v; i++) out.cmd(cmdAsl, ah); return; }
+            if(v <= 31) { out.cmd(cmdMov, al, ah); out.cmd(cmdClr, al); out.cmd(cmdSwab, ah); out.cmd(cmdClrb, ah); for(unsigned i=24; i<v; i++) out.cmd(cmdAsl, ah); return; }
+        }
+        else
+        {
+            uint32_t m = 0xFFFFFFFF >> v;
+            if(v == 1) { out.clc(); out.cmd(cmdRor, ah); out.cmd(cmdRor, al); return; }
+            if(v <= 15) { for(unsigned i=8; i<v; i++) { out.cmd(cmdRor, ah); out.cmd(cmdRor, al); } out.cmd(cmdBic, Arg11(atValue, 0, ~(m>>16)), ah); return; }
+            if(v == 16) { out.cmd(cmdMov, ah, al); out.cmd(cmdClr, ah); return; }
+            if(v <= 23) { out.cmd(cmdMov, ah, al); out.cmd(cmdClr, ah); for(unsigned i=16; i<v; i++) out.cmd(cmdRor, al); out.cmd(cmdBic, Arg11(atValue, 0, ~m), al); return; }
+            if(v <= 31) { out.cmd(cmdMov, ah, al); out.cmd(cmdClr, ah); out.cmd(cmdSwab, ah); for(unsigned i=24; i<v; i++) out.cmd(cmdRor, al); out.cmd(cmdBic, Arg11(atValue, 0, ~m), al); return; }
+        }
+        out.cmd(cmdClr, al);
+        out.cmd(cmdClr, ah);
+        return;
+    }
+
+    throw std::runtime_error("CompilerPdp11::shift");
 }
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -908,6 +978,8 @@ void CompilerPdp11::compileFunction(Function* f)
 
     curFn = f;
     if(f->stackSize) out.cmd(cmdSub, Arg11(atValue, 0, f->stackSize), Arg11::sp); //! Использовать PUSH
+
+    //! Вместо двух проходов сделать промежуточный ассемблер
 
     treePrepare(f);
 

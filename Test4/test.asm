@@ -225,6 +225,24 @@ uint8_t getc2()
 
 void main()
 {
+    uint8_t aa;
+    aa = aa >> 1;
+    aa = aa >> 2;
+    aa = aa >> 3;
+    aa = aa >> 4;
+    aa = aa >> 5;
+    aa = aa >> 6;
+    aa = aa >> 7;
+    aa = aa >> 8;
+    aa = aa << 1;
+    aa = aa << 2;
+    aa = aa << 3;
+    aa = aa << 4;
+    aa = aa << 5;
+    aa = aa << 6;
+    aa = aa << 7;
+    aa = aa << 8;
+
     if((displaystatus() & 1) == 0) putc(0233); // Включение режима 256x256
     putc(0x9A); // Выключение курсора
     *(uint16_t*)0177706 = 731; // Запуск таймера
@@ -349,7 +367,7 @@ void startGame()
                 continue;
             default:
                 if(gameOverFlag) return;
-                uint8_t* a = &playfield[(cursorY << 4) + cursorX];
+                uint8_t* a = &playfield[cursorX + (cursorY << 4)];
                 uint8_t v = *a;
                 if((v & 0x7F) > 2) continue;
                 v++;
@@ -377,7 +395,7 @@ void putBombs()
 	y = rand(); y = (y>>4) ^ (y&0xF);
         if(x >= gameWidth || y >= gameHeight) continue;
         if(cursorX==x && cursorY==y) continue; // Бомба не должна быть под крсором
-        uint8_t* a = &playfield[(y<<4) + x];
+        uint8_t* a = &playfield[x + (y<<4)];
         if(*a == 0x80) continue; // Бомба в этой клетке уже есть
         *a = 0x80;
         bc--;
@@ -449,7 +467,7 @@ void open(unsigned x, unsigned y)
     hideCursor();
     open_x = x;
     open_y = y;
-    open_a = &playfield[(y << 4) + x];
+    open_a = &playfield[x + (y << 4)];
     open_int();
     drawCursor();
     if(gameOverFlag)
@@ -479,7 +497,7 @@ void* getBitmap(uint8_t n)
 
 void redrawCell012(unsigned x, unsigned y)
 {
-    draw(calcCell2(x,y), getBitmap(playfield[(y<<4)+x]), 1, 16);
+    draw(calcCell2(x,y), getBitmap(playfield[x + (y<<4)]), 1, 16);
 }
 
 uint8_t rand_state = 0xFA;

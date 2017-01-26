@@ -30,14 +30,35 @@ void AsmPdp11::arg(const Arg11& a)
 
 //---------------------------------------------------------------------------------------------------------------------
 
-void AsmPdp11::cmd(Cmd11a cmd, Arg11 a, Arg11 b)
+void AsmPdp11::cmd(Cmd11a op, Arg11 b, Arg11 a)
 {
+    /* //! Надо добавить операторы cmdAdd1, cmdSub1, cmdSet0/
+    if(b.type == atValue && b.str.empty())
+    {
+        switch(op)
+        {
+            case cmdAdd:
+                if(b.type == atValue && b.str.empty() && b.value == 1) { cmd(cmdInc, a); return; }
+                break;
+            case cmdSub:
+                if(b.type == atValue && b.str.empty() && b.value == 1) { cmd(cmdDec, a); return; }
+                break;
+            case cmdMov:
+                if(b.type == atValue && b.str.empty() && b.value == 0) { cmd(cmdClr, a); return; }
+                break;
+            case cmdMovb:
+                if(b.type == atValue && b.str.empty() && (b.value & 0xFF) == 0) { cmd(cmdClrb, a); return; }
+                break;
+        }
+    }
+    */
+
     // Замена BIC, BIS... на короткие аналоги
-    if(a.type>=8) a.reg = 7;
     if(b.type>=8) b.reg = 7;
-    c.out.write16((cmd<<12)|((a.type&7)<<9)|(a.reg<<6)|((b.type&7)<<3)|(b.reg));
-    arg(a);
+    if(a.type>=8) a.reg = 7;
+    c.out.write16((op<<12)|((b.type&7)<<9)|(b.reg<<6)|((a.type&7)<<3)|(a.reg));
     arg(b);
+    arg(a);
 }
 
 //---------------------------------------------------------------------------------------------------------------------
