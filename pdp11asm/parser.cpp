@@ -31,11 +31,16 @@ static int findx(const char** a, const char* s, size_t si) {
 //-----------------------------------------------------------------------------
 
 Parser::Parser() {
+  macroOff=false;
+
   cfg.caseSel=false;
   cfg.cescape=false;
   cfg.remark = 0;
+  cfg.bremark = 0;
+  cfg.eremark = 0;
   cfg.operators = 0;
   cfg.decimalnumbers = false;
+  cfg.prep = 0;
 
   sigCursor = prevCursor = cursor = 0;
   sigLine = prevLine = line = 1;
@@ -67,7 +72,7 @@ void Parser::init(const char* buf) {
   line = col = 1;
   firstCursor = prevCursor = cursor = buf;
   token = ttEof;   
-  cfg.altstring = 0;
+  cfg.altstringb = 0;
   nextToken();
 }
 
@@ -128,7 +133,58 @@ retry:
     for(;s<cursor;s++)
       if(*s==10) { line++; col=1; } else
       if(*s!=13) col++;
+
+    while(!macroOff && cfg.prep && token==ttOperator && tokenText[0]=='#')
+    {
+      Parser::ParserMacroOff md(*this);
+
+      prepCfg = cfg;
+      cfg.altstringb = '<';
+      cfg.altstringe = '>';
+      cfg.eol = true;
+      macroOff = true;
+
+      needToken("#");
+      //TokenText cmd;
+      //strcpy(cmd, needIdent());
+      //std::string body;
+      //readDirective(body);
+      cfg.prep(*this);
+      nextToken(); //! Убрать рекурсию
+    }
   } while(token==ttComment);
+
+  if(token==ttWord  && !macroOff) {
+    int i=0;
+    for(std::list<Macro>::iterator m = macro.begin(); m != macro.end(); m++, i++) {
+      if(!m->disabled && 0==strcmp(m->id.c_str(), tokenText)) {
+        nextToken();
+        if(m->args.size()>0) {
+          if(token!=ttOperator || 0!=strcmp(tokenText, "(")) syntaxError();
+          std::vector<std::string> noArgs;
+          for(unsigned int j=0; j<m->args.size(); j++) {
+            std::string out;
+            readComment(out, j+1 < m->args.size() ? "," : ")", false);
+            addMacro(m->args[j].c_str(), out.c_str(), noArgs);
+          }
+          prevCursor = cursor; prevLine = line; prevCol = col;
+        }
+        m->disabled = true;
+        enterMacro(m->args.size(), 0, i, false);
+        init(m->body.c_str());
+        return;
+      }
+    }
+  }
+}
+
+//-----------------------------------------------------------------------------
+
+void Parser::exitPrep()
+{
+    cfg = prepCfg;
+    macroOff = false;
+    if(token!=ttEof && token!=ttEol) syntaxError();
 }
 
 //-----------------------------------------------------------------------------
@@ -169,8 +225,8 @@ void Parser::nextToken2() {
     return;
   }
 
-  if(c=='\'' || c=='"' || c==cfg.altstring) {
-    char quoter=c;
+  if(c=='\'' || c=='"' || c==cfg.altstringb) {
+    char quoter = c==cfg.altstringb ? cfg.altstringe : c;
     for(;;) {
       c=*cursor;
       if(c==0 || c==10 || c==13) syntaxError("Unterminated string");
@@ -315,6 +371,25 @@ void Parser::nextToken2() {
       }
     }
   }
+  // Комментарии
+  if(cfg.bremark) {
+    for(int j=0; cfg.bremark[j]; j++)
+      if(0==strcasecmp(tokenText, cfg.bremark[j])) {
+        while(true) {
+          char c1=c;
+          c=*cursor;
+          if(c==0) break;
+         // if(c==10) line++;
+          cursor++;
+          if(cfg.eremark[j][1]==0)
+            { if(c==cfg.eremark[j][0]) break; }
+          else
+            { if(c1==cfg.eremark[j][0] && c==cfg.eremark[j][1]) break; }
+        }
+        token=ttComment; //! c==0
+        return;
+      }
+  }
 }
 
 //-----------------------------------------------------------------------------
@@ -394,7 +469,7 @@ void Parser::leaveMacro() {
   //col       =m.col;
   //prevCol   =m.prevCol;
   //prevLine  =m.prevLine;
-  fileName  =m.fileName;
+  fileName    =m.fileName;
   //sigCol    =m.sigCol;
   //sigLine   =m.sigLine;
   firstCursor = m.prevFirstCursor;
@@ -406,12 +481,123 @@ void Parser::leaveMacro() {
     get(macro, m.disabledMacro).disabled = false;
   }
   macroStack.pop_back();
-};
-
+}
 
 void Parser::jump(Label& label, bool dontLoadNextToken) {
   sigCursor = cursor = prevCursor = label.cursor;
   sigLine = prevLine = line = label.line;
   sigCol = prevCol = col = label.col;
   if(!dontLoadNextToken) nextToken();
+}
+
+void Parser::readDirective(std::string& out)
+{
+    char c=0, c1;
+    const char* start = prevCursor;
+    line = prevLine;
+    col = prevCol;
+    for(;;)
+    {
+        c1 = c;
+        c = *prevCursor;
+        if(c == 0)
+        {
+            out.append(start, prevCursor-start);
+            break;
+        }
+        prevCursor++;
+        if(c==10)
+        {
+            unsigned l = prevCursor-start-1;
+            if(c1=='\\')
+            {
+                line++;
+                col=1;
+                out.append(start, l-1); //! Проверить, не попадает ли перевод строки
+                start = prevCursor;
+                continue;
+            }
+            if(c1==13) l--;
+            out.append(start, l); //! Проверить, не попадает ли перевод строки
+            break;
+        }
+        col++;
+     }
+     cursor = prevCursor;
+     token = ttEol;
+     //nextToken();
+}
+
+void Parser::addMacro(const char* id, const char* body, const std::vector<std::string>& args)
+{
+    macro.push_back(Macro());
+    Macro& m = macro.back();
+    m.id   = id;
+    m.body = body;
+    m.args = args;
+}
+
+bool Parser::deleteMacro(const char* id)
+{
+    for(std::list<Macro>::iterator m = macro.begin(); m != macro.end(); m++)
+    {
+        if(m->id == id)
+        {
+            macro.erase(m);
+            return true;
+        }
+    }
+    return false;
+}
+
+bool Parser::findMacro(const char* id)
+{
+    for(std::list<Macro>::iterator m = macro.begin(); m != macro.end(); m++)
+    {
+        if(m->id == id) {
+            return true;
+        }
+    }
+    return false;
+}
+
+//---------------------------------------------------------------------------
+
+void Parser::readComment(std::string& out, const char* term, bool cppEolDisabler) {
+  const char* t=cursor;
+  waitComment(term, cppEolDisabler ? '\\' : 0);
+  out.assign(t, cursor-t);
+//  if(cppEolDisabler)
+//    out = replace("\\\r\n", "\r\n", out);
+  int termLen=strlen(term);
+  if(0==strcmp(out.c_str()+out.size()-termLen, term)) out.resize(out.size()-termLen);
+}
+
+bool Parser::waitComment(const char* erem, char combineLine) {
+  const char* s=cursor;
+  char c=0;
+  bool eof;
+  while(true) {
+    char c1=c;
+    c=*cursor;
+    if(c==0) { eof=true; break; } //syntaxError((string)T"Íå íàéäåí êîíåö êîììåíòàðèÿ "+erem[j]);
+  //  if(c==10) line++;
+    cursor++;
+    if(c==combineLine && cursor[0]=='\r') {
+      cursor++;
+      if(cursor[0]=='\n') cursor++;
+      continue;
+    }
+    if(erem[1]==0) {
+      if(c==erem[0]) { eof=false; break; }
+    } else {
+      if(c1==erem[0] && c==erem[1]) { eof=false; break; }
+    }
+  }
+  // Óâåëè÷èâàåì êóðñîð
+  for(;s<cursor;s++)
+    if(*s==10) { line++; col=1; } else
+    if(*s!=13) col++;
+  //
+  return eof;
 }

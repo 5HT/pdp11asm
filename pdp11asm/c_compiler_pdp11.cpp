@@ -307,7 +307,7 @@ void CompilerPdp11::compileVar(Node* n, unsigned d, IfOpt* ifOpt)
 
         case ntConstS: // Константа
             out.cmd(cmdMov, Arg11::null, Arg11(atReg, d));
-            if(out.step==1) out.c.addFixup(n->cast<NodeConst>()->text.c_str(), 2);
+            if(out.step==1) out.c.addFixup(Compiler::ftWord, n->cast<NodeConst>()->text.c_str(), 2);
             return;
 
         case ntConvert: // Преобразование типов

@@ -14,7 +14,17 @@
 
 namespace C
 {
-    enum BaseType { cbtError, cbtVoid, cbtStruct, cbtChar, cbtShort, cbtLong, cbtUChar, cbtUShort, cbtULong };
+    enum BaseType {
+        cbtError,
+        cbtVoid,
+        cbtStruct,
+        cbtChar,
+        cbtShort,
+        cbtLong,
+        cbtUChar,
+        cbtUShort,
+        cbtULong
+    };
 
     struct Struct;
 
@@ -45,6 +55,15 @@ namespace C
         inline bool is8_16()   { return (baseType==cbtUShort || baseType==cbtShort || baseType==cbtChar || baseType==cbtUChar) || addr!=0; }
         inline bool is32()     { return (baseType==cbtULong || baseType==cbtLong) && addr==0; }
         inline bool isSigned() { return (baseType==cbtChar || baseType==cbtShort || baseType==cbtLong) && addr==0; }
+
+        inline char b()
+        {
+            char pf;
+            if(is8()) return 'B';
+            if(is16()) return 'W';
+            throw std::runtime_error("int");
+        }
+
     /*
         unsigned getSize()
         {

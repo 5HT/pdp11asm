@@ -59,24 +59,29 @@ public:
 
     // c_8080.cpp
     bool compileLine_8080();
+    unsigned disassembly8080(char* out, uint8_t* x, unsigned l, unsigned pos);
+
+    enum FixupType { ftWord, ftByte };
 
     class Fixup {
     public:
+        FixupType type;
         size_t addr;
         std::string name;
 
-        Fixup(size_t _addr=0, const std::string& _name="") : addr(_addr), name(_name) {}
+        Fixup(FixupType& _type, size_t _addr=0, const std::string& _name="") : type(_type), addr(_addr), name(_name) {}
     };
 
     std::vector<Fixup> fixups;
 
-    inline void addFixup(const std::string& name, unsigned d=0)
+    inline void addFixup(FixupType type, const std::string& name, unsigned d=0)
     {
-        fixups.push_back(Fixup(out.writePtr-d, ucase(name)));
+        fixups.push_back(Fixup(type, out.writePtr-d, ucase(name)));
     }
 
-    void addLabel(std::string& name)
+    void addLabel(const std::string& name)
     {
+        printf("label %s = %u\n", name.c_str(), (unsigned)out.writePtr);
         labels[ucase(name)] = out.writePtr;
     }
 };

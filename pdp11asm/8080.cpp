@@ -11,95 +11,95 @@ struct Command {
   int opcode;
 };
 
+static const char* r8[] = { "b", "c", "d", "e", "h", "l", "m", "a", 0 }; // ?_R8 C_R8I8
+static const char* r16[] = { "b","d","h","sp",0 }; // C_R16 C_R16I16
+static const char* bd[] = { "b","d",0 }; // C_BD
+static const char* r16psw[] = { "b","d","h","psw",0 }; // C_R16PSW
+
+static Command allCommands[] = {
+  { "add",  C_R8,     0, 0x80 },
+  { "adi",  C_I8,     0, 0xC6 },
+  { "adc",  C_R8,     0, 0x88 },
+  { "aci",  C_I8,     0, 0xCE },
+  { "ana",  C_R8,     0, 0xA0 },
+  { "ani",  C_I8,     0, 0xE6 },
+  { "call", C_I16,    0, 0xCD },
+  { "cz",   C_I16,    0, 0xCC },
+  { "cnz",  C_I16,    0, 0xC4 },
+  { "cp",   C_I16,    0, 0xF4 },
+  { "cm",   C_I16,    0, 0xFC },
+  { "cc",   C_I16,    0, 0xDC },
+  { "cnc",  C_I16,    0, 0xD4 },
+  { "cpe",  C_I16,    0, 0xEC },
+  { "cpo",  C_I16,    0, 0xE4 },
+  { "cma",  C_NONE,   0, 0x2F },
+  { "cmc",  C_NONE,   0, 0x3F },
+  { "cmp",  C_R8,     0, 0xB8 },
+  { "cpi",  C_I8,     0, 0xFE },
+  { "daa",  C_NONE,   0, 0x27 },
+  { "dad",  C_R16,    4, 0x09 },
+  { "dcr",  C_R8,     3, 0x05 },
+  { "dcx",  C_R16,    4, 0x0B },
+  { "di",   C_NONE,   0, 0xF3 },
+  { "ei",   C_NONE,   0, 0xFB },
+  { "hlt",  C_NONE,   0, 0x76 },
+  { "in",   C_I8,     0, 0xDB },
+  { "inr",  C_R8,     3, 0x04 },
+  { "inx",  C_R16,    4, 0x03 },
+  { "jmp",  C_I16,    0, 0xC3 }, //dbl
+  { "jz",   C_I16,    0, 0xCA },
+  { "jnz",  C_I16,    0, 0xC2 },
+  { "jmp",  C_I16,    0, 0xC3 }, //dbl
+  { "jp",   C_I16,    0, 0xF2 },
+  { "jm",   C_I16,    0, 0xFA },
+  { "jc",   C_I16,    0, 0xDA },
+  { "jnc",  C_I16,    0, 0xD2 },
+  { "jpe",  C_I16,    0, 0xEA },
+  { "jpo",  C_I16,    0, 0xE2 },
+  { "lda",  C_I16,    0, 0x3A },
+  { "ldax", C_BD,     4, 0x0A },
+  { "lhld", C_I16,    0, 0x2A },
+  { "lxi",  C_R16I16, 4, 0x01 },
+  { "mov",  C_R8R8,   0, 0x40 },
+  { "mvi",  C_R8I8,   3, 0x06 },
+  { "nop",  C_NONE,   0, 0x00 },
+  { "ora",  C_R8,     0, 0xB0 },
+  { "ori",  C_I8,     0, 0xF6 },
+  { "out",  C_I8,     0, 0xD3 },
+  { "pchl", C_NONE,   0, 0xE9 },
+  { "pop",  C_R16PSW, 4, 0xC1 },
+  { "push", C_R16PSW, 4, 0xC5 },
+  { "ral",  C_NONE,   0, 0x17 },
+  { "rar",  C_NONE,   0, 0x1F },
+  { "rlc",  C_NONE,   0, 0x07 },
+  { "rrc",  C_NONE,   0, 0x0F },
+  { "ret",  C_NONE,   0, 0xC9 },
+  { "rz",   C_NONE,   0, 0xC8 },
+  { "rnz",  C_NONE,   0, 0xC0 },
+  { "rp",   C_NONE,   0, 0xF0 },
+  { "rm",   C_NONE,   0, 0xF8 },
+  { "rc",   C_NONE,   0, 0xD8 },
+  { "rnc",  C_NONE,   0, 0xD0 },
+  { "rpe",  C_NONE,   0, 0xE8 },
+  { "rpo",  C_NONE,   0, 0xE0 },
+  { "rst",  C_I8X,    3, 0xC7 },
+  { "sphl", C_NONE,   0, 0xF9 },
+  { "shld", C_I16,    0, 0x22 },
+  { "sta",  C_I16,    0, 0x32 },
+  { "stax", C_BD,     4, 0x02 },
+  { "stc",  C_NONE,   0, 0x37 },
+  { "sub",  C_R8,     0, 0x90 },
+  { "sui",  C_I8,     0, 0xD6 },
+  { "sbb",  C_R8,     0, 0x98 },
+  { "sbi",  C_I8,     0, 0xDE },
+  { "xchg", C_NONE,   0, 0xEB },
+  { "xthl", C_NONE,   0, 0xE3 },
+  { "xra",  C_R8,     0, 0xA8 },
+  { "xri",  C_I8,     0, 0xEE },
+  { 0,      C_NONE,   0, 0 }
+};
+
 bool Compiler::compileLine_8080() {
-  static const char* r8[] = { "b", "c", "d", "e", "h", "l", "m", "a", 0 }; // ?_R8 C_R8I8
-  static const char* r16[] = { "b","d","h","sp",0 }; // C_R16 C_R16I16
-  static const char* bd[] = { "b","d",0 }; // C_BD
-  static const char* r16psw[] = { "b","d","h","psw",0 }; // C_R16PSW
-
-  static Command allCommands[] = {
-    { "add",  C_R8,     0, 0x80 },
-    { "adi",  C_I8,     0, 0xC6 },
-    { "adc",  C_R8,     0, 0x88 },
-    { "aci",  C_I8,     0, 0xCE },
-    { "ana",  C_R8,     0, 0xA0 },
-    { "ani",  C_I8,     0, 0xE6 },
-    { "call", C_I16,    0, 0xCD },
-    { "cz",   C_I16,    0, 0xCC },
-    { "cnz",  C_I16,    0, 0xC4 },
-    { "cp",   C_I16,    0, 0xF4 },
-    { "cm",   C_I16,    0, 0xFC },
-    { "cc",   C_I16,    0, 0xDC },
-    { "cnc",  C_I16,    0, 0xD4 },
-    { "cpe",  C_I16,    0, 0xEC },
-    { "cpo",  C_I16,    0, 0xE4 },
-    { "cma",  C_NONE,   0, 0x2F },
-    { "cmc",  C_NONE,   0, 0x3F },
-    { "cmp",  C_R8,     0, 0xB8 },
-    { "cpi",  C_I8,     0, 0xFE },
-    { "daa",  C_NONE,   0, 0x27 },
-    { "dad",  C_R16,    4, 0x09 },
-    { "dcr",  C_R8,     3, 0x05 },
-    { "dcx",  C_R16,    4, 0x0B },
-    { "di",   C_NONE,   0, 0xF3 },
-    { "ei",   C_NONE,   0, 0xFB },
-    { "hlt",  C_NONE,   0, 0x76 },
-    { "in",   C_I8,     0, 0xDB },
-    { "inr",  C_R8,     3, 0x04 },
-    { "inx",  C_R16,    4, 0x03 },
-    { "jmp",  C_I16,    0, 0xC3 },
-    { "jz",   C_I16,    0, 0xCA },
-    { "jnz",  C_I16,    0, 0xC2 },
-    { "jmp",  C_I16,    0, 0xC3 },
-    { "jp",   C_I16,    0, 0xF2 },
-    { "jm",   C_I16,    0, 0xFA },
-    { "jc",   C_I16,    0, 0xDA },
-    { "jnc",  C_I16,    0, 0xD2 },
-    { "jpe",  C_I16,    0, 0xEA },
-    { "jpo",  C_I16,    0, 0xE2 },
-    { "lda",  C_I16,    0, 0x3A },
-    { "ldax", C_BD,     4, 0x0A },
-    { "lhld", C_I16,    0, 0x2A },
-    { "lxi",  C_R16I16, 4, 0x01 },
-    { "mov",  C_R8R8,   0, 0x40 },
-    { "mvi",  C_R8I8,   3, 0x06 },
-    { "nop",  C_NONE,   0, 0x00 },
-    { "ora",  C_R8,     0, 0xB0 },
-    { "ori",  C_I8,     0, 0xF6 },
-    { "out",  C_I8,     0, 0xD3 },
-    { "pchl", C_NONE,   0, 0xE9 },
-    { "pop",  C_R16PSW, 4, 0xC1 },
-    { "push", C_R16PSW, 4, 0xC5 },
-    { "ral",  C_NONE,   0, 0x17 },
-    { "rar",  C_NONE,   0, 0x1F },
-    { "rlc",  C_NONE,   0, 0x07 },
-    { "rrc",  C_NONE,   0, 0x0F },
-    { "ret",  C_NONE,   0, 0xC9 },
-    { "rz",   C_NONE,   0, 0xC8 },
-    { "rnz",  C_NONE,   0, 0xC0 },
-    { "rp",   C_NONE,   0, 0xF0 },
-    { "rm",   C_NONE,   0, 0xF8 },
-    { "rc",   C_NONE,   0, 0xD8 },
-    { "rnc",  C_NONE,   0, 0xD0 },
-    { "rpe",  C_NONE,   0, 0xE8 },
-    { "rpo",  C_NONE,   0, 0xE0 },
-    { "rst",  C_I8X,    3, 0xC7 },
-    { "sphl", C_NONE,   0, 0xF9 },
-    { "shld", C_I16,    0, 0x22 },
-    { "sta",  C_I16,    0, 0x32 },
-    { "stax", C_BD,     4, 0x02 },
-    { "stc",  C_NONE,   0, 0x37 },
-    { "sub",  C_R8,     0, 0x90 },
-    { "sui",  C_I8,     0, 0xD6 },
-    { "sbb",  C_R8,     0, 0x98 },
-    { "sbi",  C_I8,     0, 0xDE },
-    { "xchg", C_NONE,   0, 0xEB },
-    { "xthl", C_NONE,   0, 0xE3 },
-    { "xra",  C_R8,     0, 0xA8 },
-    { "xri",  C_I8,     0, 0xEE },
-    { 0,C_NONE,0,0 }
-  };
-
   unsigned n, i;
   if(p.ifToken(allCommands, n)) {
     Command& c = allCommands[n];
@@ -121,4 +121,113 @@ bool Compiler::compileLine_8080() {
   }
 
   return false;
+}
+
+unsigned Compiler::disassembly8080(char* out, uint8_t* x, unsigned l, unsigned pos)
+{
+    unsigned i;
+    if(l==0) { out[0]=0; return 0; };
+    l--;
+    uint8_t y = *x++;
+
+    for(i=0; allCommands[i].name; i++)
+    {
+        Command& c = allCommands[i];
+        switch(c.arg)
+        {
+            case C_NONE:
+                if(y == c.opcode)
+                {
+                    snprintf(out, disassemblyPdp11OutSize, "%s", c.name);
+                    return 1;
+                }
+                break;
+
+            case C_R8:
+                if((y & ~(7 << c.shl)) == c.opcode)
+                {
+                    snprintf(out, disassemblyPdp11OutSize, "%s %s", c.name, r8[(y >> c.shl) & 7]);
+                    return 1;
+                }
+                break;
+
+            case C_R16:
+                if((y & ~(3 << c.shl)) == c.opcode)
+                {
+                    snprintf(out, disassemblyPdp11OutSize, "%s %s", c.name, r16[(y >> c.shl) & 3]);
+                    return 1;
+                }
+                break;
+
+            case C_R16PSW:
+                if((y & ~(3 << c.shl)) == c.opcode)
+                {
+                    snprintf(out, disassemblyPdp11OutSize, "%s %s", c.name, r16psw[(y >> c.shl) & 3]);
+                    return 1;
+                }
+                break;
+
+            case C_I8:
+                if(y == c.opcode)
+                {
+                    snprintf(out, disassemblyPdp11OutSize, "%s %u", c.name, *x);
+                    return 2;
+                }
+                break;
+
+            case C_I16:
+                if(y == c.opcode)
+                {
+                    snprintf(out, disassemblyPdp11OutSize, "%s %u", c.name, *(uint16_t*)x);
+                    return 3;
+                }
+                break;
+
+            case C_R16I16:
+                if((y & ~(3 << c.shl)) == c.opcode)
+                {
+                    snprintf(out, disassemblyPdp11OutSize, "%s %s, %u", c.name, r16[(y >> c.shl) & 3], *(uint16_t*)x);
+                    return 3;
+                }
+                break;
+
+            case C_R8I8:
+                if((y & ~(7 << c.shl)) == c.opcode)
+                {
+                    snprintf(out, disassemblyPdp11OutSize, "%s %s, %u", c.name, r8[(y >> c.shl) & 7], *x);
+                    return 2;
+                }
+                break;
+
+            case C_R8R8:
+                if((y & 0xC0) == c.opcode)
+                {
+                    snprintf(out, disassemblyPdp11OutSize, "%s %s, %s", c.name, r8[(y >> 3) & 7], r8[y & 7]);
+                    return 1;
+                }
+                break;
+
+            case C_I8X:
+                if((y & ~0x38) == c.opcode)
+                {
+                    snprintf(out, disassemblyPdp11OutSize, "%s %u", c.name, *x & 0x38);
+                    return 1;
+                }
+                break;
+
+            case C_BD:
+                if((y & ~(1 << c.shl)) == c.opcode)
+                {
+                    snprintf(out, disassemblyPdp11OutSize, "%s %s", c.name, bd[(y >> c.shl) & 1]);
+                    return 1;
+                }
+                break;
+
+            default:
+                throw;
+        }
+    }
+
+    snprintf(out, disassemblyPdp11OutSize, "? 0%02Xh", y);
+    return 1;
 }

@@ -13,11 +13,6 @@ int main(int argc, char** argv) {
     try {
         Compiler c;
 
-        // DEBUG
-        c.compileFile("../Test4/test.asm");
-        std::cout << "Done" << std::endl;
-        return 0;
-
         // Ожидается один аргумент
         if(argc != 2) {
             std::cout << "Specify one file name on the command line" << std::endl;

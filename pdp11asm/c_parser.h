@@ -60,7 +60,9 @@ namespace C
         bool     checkStackUnique(const char* str);
 
     public:
-        inline Parser(::Parser& _p, Tree& _world) : p(_p), world(_world) { breakLabel=0; continueLabel=0; lastSwitch=0; curFn=0; }
+        bool pdp11mode;
+
+        inline Parser(::Parser& _p, Tree& _world) : p(_p), world(_world) { breakLabel=0; continueLabel=0; lastSwitch=0; curFn=0; pdp11mode=false; }
 
         void     start(unsigned step);
     };

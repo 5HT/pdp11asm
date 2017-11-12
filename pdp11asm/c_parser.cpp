@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "tools.h"
+#include "fstools.h"
 
 namespace C
 {
@@ -84,6 +85,7 @@ NodeVar* Parser::nodeConvert(NodeVar* x, Type type, bool auto_convert)
             if(type.is8()) x->cast<NodeConst>()->value &= 0xFF; else //! Предупреждение о переполнении
             if(type.is16()) x->cast<NodeConst>()->value &= 0xFFFF;
         }
+        printf("convert const %u -> %u\n", x->dataType.baseType, type.baseType);
         x->dataType = type;
         return x;
     }
@@ -249,7 +251,15 @@ NodeVar* Parser::nodeOperator2(Type type, Operator o, NodeVar* a, NodeVar* b)
     }
 
     // Фича PDP
-    if(o == oAnd || o==oSAnd) b = nodeMonoOperator(b, moXor); //!!! Приоритет у константы или регистра (т.е. прошлое вычисление дало регистр)
+    if(pdp11mode)
+    {
+        if(o == oAnd || o==oSAnd) b = nodeMonoOperator(b, moXor); //!!! Приоритет у константы или регистра (т.е. прошлое вычисление дало регистр)
+    }
+
+    if(a->dataType.baseType != b->dataType.baseType)
+    {
+        printf("op %u a %u b %u\n", o, a->dataType.baseType, b->dataType.baseType);
+    }
 
     return outOfMemory(new NodeOperator(type, o, a, b));
 }
@@ -583,6 +593,7 @@ void Parser::parseStruct(Struct& s, int m)
         if(p.ifToken(xx, su))
         {
             Struct* sii = parseStruct3(su);
+            if(!sii) p.syntaxError();
             if(p.ifToken(";"))
             {
                 Struct& s1 = *sii;
@@ -626,28 +637,36 @@ void Parser::parseStruct(Struct& s, int m)
 
 //---------------------------------------------------------------------------------------------------------------------
 
+//! Нельзя использовать struct v* a; до его объеявления
+//!
 Struct* Parser::parseStruct3(int m)
 {
-    world.structs.push_back(Struct());
-    Struct& s1 = world.structs.back();
-    s1.size = 0;
-    if(!p.ifToken("{"))
+    bool w = p.ifToken(ttWord);
+    if(w || p.ifToken("{"))
     {
-        std::string new_name = p.needIdent();
-        for(std::list<Struct>::iterator i=world.structs.begin(); i!=world.structs.end(); i++)
-            if(i->name == new_name)
-                p.syntaxError("Имя уже испольузется");
-        s1.name = new_name;
-        p.needToken("{");
+        if(w)
+        {
+           for(std::list<Struct>::iterator i=world.structs.begin(); i!=world.structs.end(); i++)
+                if(i->name == p.loadedText)
+                {
+                    if(p.ifToken("{")) p.syntaxError(((std::string)"Имя '"+p.loadedText+"' уже испольузется").c_str());
+                    return &*i;
+                }
+        }
+        else
+        {
+            snprintf(p.loadedText, sizeof(p.loadedText), "?%u", world.userStructCnt++);
+        }
+
+        world.structs.push_back(Struct());
+        Struct& s1 = world.structs.back();
+        s1.size = 0;
+        s1.name = p.loadedText;
+        if(w) p.needToken("{");
+        parseStruct(s1, m);
+        return &s1;
     }
-    else
-    {
-        char name[256];
-        snprintf(name, sizeof(name), "?%u", world.userStructCnt++);
-        s1.name = name;
-    }
-    parseStruct(s1, m);
-    return &s1;
+    return 0;
 }
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -666,12 +685,13 @@ Type Parser::readType(bool error)
     if(p.ifToken("int32_t" )) return cbtULong;
 
     // Простые типы данных
-    bool u = p.ifToken("unsigned");
+    bool s = p.ifToken("signed");
+    bool u = !s && p.ifToken("unsigned");
     if(p.ifToken("char" )) return u ? cbtUChar  : cbtChar;
-    if(p.ifToken("short")) return u ? cbtUShort : cbtShort;
+    if(p.ifToken("short")) { p.ifToken("int"); return u ? cbtUShort : cbtShort; }
     if(p.ifToken("int"  )) return u ? cbtUShort : cbtShort;
     if(p.ifToken("long" )) return u ? cbtULong  : cbtLong;
-    if(u) return cbtUShort;
+    if(u || s) return u ? cbtUShort : cbtShort;
 
     // typedef-ы
     for(std::list<Typedef>::iterator i=world.typedefs.begin(); i!=world.typedefs.end(); i++)
@@ -693,6 +713,7 @@ Type Parser::readType(bool error)
             }
         }
         Struct* s = parseStruct3(su);
+        if(!s) p.syntaxError();
 
         // Возврат структуры
         Type type;
@@ -1050,8 +1071,17 @@ Function* Parser::parseFunction(Type& retType, const std::string& name)
 
             if(p.ifToken("@"))
             {
-                const char* args[] = { "r0", "r1", "r2", "r3", "r4", "r5", 0  };
-                reg = p.needToken(args) + 1;
+                const char* args8080[] = { "b", "c", "d", "e", "h", "l", "", "a", "hl", 0  };
+                unsigned n;
+                if(p.ifToken(args8080, n))
+                {
+                    reg = n + 1;
+                }
+                else
+                {
+                    const char* args[] = { "r0", "r1", "r2", "r3", "r4", "r5", 0  };
+                    reg = p.needToken(args) + 1;
+                }
             }
 
             argTypes.push_back(FunctionArg(n, t, reg));
@@ -1079,14 +1109,31 @@ Function* Parser::parseFunction(Type& retType, const std::string& name)
 
     if(p.ifToken("@"))
     {
-        p.needToken("emt");
-        p.needToken(ttInteger);
-        f->call_type = 1;
-        f->call_arg = p.tokenNum;
-        if(p.ifToken(","))
+        if(p.ifToken("emt"))
         {
-            const char* args[] = { "r0", "r1", "r2", "r3", "r4", "r5", 0  };
-            f->reg = p.needToken(args) + 1;
+            p.needToken(ttInteger);
+            f->call_type = 1;
+            f->call_arg = p.tokenNum;
+            if(p.ifToken(","))
+            {
+                const char* args8080[] = { "b", "c", "d", "e", "h", "l", "", "a", "hl", 0  };
+                unsigned n;
+                if(p.ifToken(args8080, n))
+                {
+                    f->reg = n + 1;
+                }
+                else
+                {
+                    const char* args[] = { "r0", "r1", "r2", "r3", "r4", "r5", 0  };
+                    f->reg = p.needToken(args) + 1;
+                }
+            }
+        }
+        else
+        {
+            p.needToken(ttInteger);
+            f->call_type = 2;
+            f->call_arg = p.tokenNum;
         }
     }
 
@@ -1216,7 +1263,8 @@ void Parser::parse2()
 
         if(typedef1)
         {
-            if(!world.checkUnique(name)) p.syntaxError("Имя уже используется");
+            if(!world.checkUnique(name)) p.syntaxError(("Имя '" + name + "' уже используется").c_str());
+            printf("TD %s\n", name.c_str());
             world.addTypedef(name.c_str(), type);
         }
         else
@@ -1264,6 +1312,117 @@ static const char* c_remark[] = {
     "//", 0
 };
 
+static const char* c_bremark[] = {
+    "/*", 0
+};
+
+static const char* c_eremark[] = {
+    "*/", 0
+};
+
+void ignoreTo(::Parser& p, bool canElse) {
+    unsigned l=0;
+    for(;;) {
+        //! Запрет освобождения макростека
+        if(p.ifToken(ttEof)) p.syntaxError("Ожидается #endif");
+        if(!p.ifToken("#")) { p.nextToken(); continue; }
+        if(p.ifToken("endif"))
+        {
+            if(l==0) return;
+            l--;
+            continue;
+        }
+        if(p.ifToken("else")) {
+            if(l!=0) continue;
+            if(!canElse) p.syntaxError("Тут не может быть #endif");
+            return;
+        }
+        if(p.ifToken("ifdef")) { l++; continue; }
+        if(p.ifToken("ifndef")) { l++; continue; }
+        //! Вложенность
+    }
+}
+
+void prep(::Parser& p)
+{
+    if(p.ifToken("include"))
+    {
+        if(!p.ifToken(ttString2))
+            p.needToken(ttString1);
+        ::Parser::TokenText fileName;
+        strcpy(fileName, p.loadedText);
+        p.exitPrep();
+        p.cfg = p.prepCfg;
+        p.macroOff = false;
+
+        printf("INCLUDE [%s]\n", fileName);
+
+        std::string buf;
+        loadStringFromFile(buf, fileName);
+
+        p.macroOff = false;
+        p.enterMacro(0, &buf, -1, true);
+        p.fileName = fileName;
+
+        return;
+    }
+    if(p.ifToken("define"))
+    {
+        bool argsE = (p.cursor[0]=='(');
+        std::string id = p.needIdent();
+        std::vector<std::string> args;
+        if(argsE)
+        {
+            p.needToken("(");
+            do
+            {
+                args.push_back(p.needIdent());
+            } while(p.ifToken(","));
+            //p.getLabel(pl);
+            p.needToken(")");
+        }
+        //p.jump(pl, true);
+        std::string body;
+        p.readDirective(body);
+        p.addMacro(id.c_str(), body.c_str(), args);
+        p.exitPrep();
+        return;
+    }
+    if(p.ifToken("undef"))
+    {
+        std::string id = p.needIdent();
+        p.exitPrep();
+        p.deleteMacro(id.c_str());
+        return;
+    }
+    if(p.ifToken("else"))
+    {
+        ignoreTo(p, false);
+        p.exitPrep();
+        return;
+    }
+    if(p.ifToken("endif"))
+    {
+        p.exitPrep();
+        return;
+    }
+    if(p.ifToken("ifdef"))
+    {
+        if(!p.findMacro(p.needIdent()))
+            ignoreTo(p, true);
+        p.exitPrep();
+        return;
+    }
+    if(p.ifToken("ifndef"))
+    {
+        if(p.findMacro(p.needIdent()))
+            ignoreTo(p, true);
+        p.exitPrep();
+        return;
+    }
+    p.syntaxError("Эта команда препроцессора не реализована");
+}
+
 void Parser::start(unsigned step)
 {
     ::Parser::Config oldCfg = p.cfg;
@@ -1272,8 +1431,11 @@ void Parser::start(unsigned step)
     p.cfg.eol            = false;
     p.cfg.operators      = &c_operators[0];
     p.cfg.remark         = c_remark;
+    p.cfg.bremark        = c_bremark;
+    p.cfg.eremark        = c_eremark;
     p.cfg.caseSel        = true;
     p.cfg.decimalnumbers = true;
+    p.cfg.prep           = prep;
 
     p.needToken(ttEol);
 

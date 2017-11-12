@@ -24,7 +24,7 @@ AsmPdp11::AsmPdp11(Compiler& _c) : c(_c) {
 void AsmPdp11::arg(const Arg11& a)
 {
     if(a.type<6) return;
-    if(step==1 && !a.str.empty()) c.addFixup(ucase(a.str));
+    if(step==1 && !a.str.empty()) c.addFixup(Compiler::ftWord, ucase(a.str));
     c.out.write16(a.value);
 }
 
@@ -113,7 +113,7 @@ void AsmPdp11::ret()
 void AsmPdp11::call(const char* name, uint16_t addr)
 {
     c.out.write16(004000|(/*PC*/7<<6)|(3<<3)|(/*PC*/7));
-    if(step==1 && name[0] != 0) c.addFixup(ucase(name)); //! Так нельзя
+    if(step==1 && name[0] != 0) c.addFixup(Compiler::ftWord, ucase(name)); //! Так нельзя
     c.out.write16(addr);
 }
 
@@ -139,7 +139,7 @@ void AsmPdp11::cmd(Cmd11c co, unsigned label)
     }
 
     if(co != cmdBr) c.out.write16(co << 6);
-    cmd(cmdMov, Arg11::null, Arg11::pc);
+    cmd(cmdMov, Arg11::null, Arg11::pc); //!!!!! Вот тут помоему косяк
     fixups.push_back(Fixup(c.out.writePtr-2, label, co==cmdBr ? 0 : 1));
 }
 

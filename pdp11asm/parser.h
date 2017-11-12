@@ -15,11 +15,15 @@ public:
     public:
         const char** operators;
         const char** remark;
+        const char** bremark;
+        const char** eremark;
         bool caseSel;
-        char altstring;
+        char altstringb;
+        char altstringe;
         bool eol;
         bool cescape;
         bool decimalnumbers; // ����� �� ��������� 10-����, ����� 8-������
+        void (*prep)(Parser& p);
     };
 
   typedef uint32_t num_t;
@@ -28,12 +32,13 @@ public:
 
   // ���������
   Config cfg;
+  Config prepCfg;
 
   // ��� ������ ������
   std::string fileName; 
 
   // �����
-  std::string source;
+//  std::string source;
 
   // ������
   const char *firstCursor;
@@ -114,9 +119,25 @@ public:
     Macro() { disabled=false; }
   };
 
+  class ParserMacroOff {
+  public:
+    Parser& p;
+    bool oldMacroOff;
+    ParserMacroOff(Parser& _p) : p(_p) { oldMacroOff=p.macroOff; p.macroOff=true; }
+    ~ParserMacroOff() { p.macroOff=oldMacroOff; }
+  };
+
   std::list<Macro> macro;
+  bool macroOff;
 
   void enterMacro(int killMacro, std::string* buf, int disabledMacro, bool dontCallNextToken);
   void leaveMacro();
   void jump(Label& label, bool dontLoadNextToken);
+  void addMacro(const char* id, const char* body, const std::vector<std::string>& args);
+  bool deleteMacro(const char* id);
+  bool findMacro(const char* id);
+  void readComment(std::string& out, const char* term, bool cppEolDisabler);
+  bool waitComment(const char* erem, char combineLine);
+  void readDirective(std::string& out);
+  void exitPrep();
 };

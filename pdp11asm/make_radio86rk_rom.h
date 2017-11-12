@@ -1,11 +1,6 @@
-#ifndef MAKE_RADIO86RK_ROM_H
-#define MAKE_RADIO86RK_ROM_H
+#pragma once
 
+#include <stddef.h>
 
-class make_radio86rk_rom
-{
-public:
-    make_radio86rk_rom();
-};
+bool make_radio86rk_rom(const char* fileName, unsigned start, const char* buf, size_t size, char *error_buf, size_t error_buf_size);
 
-#endif // MAKE_RADIO86RK_ROM_H

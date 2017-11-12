@@ -7,6 +7,8 @@
 #include "fstools.h"
 #include "c_parser.h"
 #include "c_compiler_pdp11.h"
+#include "c_compiler_8080.h"
+#include "make_radio86rk_rom.h"
 
 static unsigned char cp1251_to_koi8r_tbl[256] = {
   0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,
@@ -262,15 +264,18 @@ bool Compiler::compileLine2() {
       for(;p.tokenNum>0; p.tokenNum--) out.write16(0);
       return true;
     }
-    p.cfg.altstring = '/';
+    p.cfg.altstringb = '/';
+    p.cfg.altstringe = '/';
     if(p.ifToken("ascii")) {
-      p.cfg.altstring = 0;
+      p.cfg.altstringb = 0;
+      p.cfg.altstringe = 0;
       p.needToken(ttString2);
       if(convert1251toKOI8R) cp1251_to_koi8r(p.loadedText);
       out.write(p.loadedText, strlen(p.loadedText));
       return true;
     }
-    p.cfg.altstring = 0;
+    p.cfg.altstringb = 0;
+    p.cfg.altstringe = 0;
     p.syntaxError();
   }
 
@@ -293,8 +298,10 @@ bool Compiler::compileLine2() {
 
 
       std::string o;
-      o.append((const char*)&start, 2);
-      o.append((const char*)&length, 2);
+      if(!make_binary_file) {
+          o.append((const char*)&start, 2);
+          o.append((const char*)&length, 2);
+      }
       o.append(out.writeBuf+start, length);
       saveStringToFile(fileName, o.c_str(), o.size());
       /*
@@ -312,6 +319,29 @@ bool Compiler::compileLine2() {
     }
     return true;
   }
+
+    if(p.ifToken("make_radio86rk_rom"))
+    {
+        p.needToken(ttString2);
+        Parser::TokenText fileName;
+        strcpy(fileName, p.loadedText);
+        size_t start = 0, stop = out.writePtr;
+        if(p.ifToken(","))
+        {
+            start = ullong2size_t(readConst3());
+            if(p.ifToken(",")) stop = ullong2size_t(readConst3());
+        }
+        if(step2)
+        {
+            if(stop<=start || stop>sizeof(out.writeBuf)) p.syntaxError();
+            size_t length = stop - start;
+            char error_buf[256];
+            if(!make_radio86rk_rom(fileName, start, out.writeBuf+start, length, error_buf, sizeof(error_buf)))
+                p.syntaxError(error_buf);
+            lstWriter.writeFile(fileName);
+        }
+        return true;
+    }
 
   if(p.ifToken("convert1251toKOI8R")) {
     convert1251toKOI8R = !p.ifToken("OFF");
@@ -387,10 +417,10 @@ void Compiler::compileLine() {
   // ??? ?????
   if(p.ifToken(ttInteger)) {
     makeLocalLabelName();
-    labels[p.loadedText] = out.writePtr;
+    addLabel(p.loadedText);
   } else {
     p.needToken(ttWord);
-    labels[p.loadedText] = out.writePtr;
+    addLabel(p.loadedText);
     strcpy(lastLabel, p.loadedText);
   }
   // ?? ???????????
@@ -412,7 +442,12 @@ void Compiler::processLabels()
         Fixup& f = fixups[i];
         std::map<std::string, Parser::num_t>::iterator j = labels.find(f.name);
         if(j == labels.end()) throw std::runtime_error("Метка "+f.name+" не найдена");
-        *(uint16_t*)(out.writeBuf + f.addr) = j->second;
+        printf("fixup %u = %u\n", (unsigned)f.addr, (unsigned)j->second);
+        switch(f.type)
+        {
+            case ftByte: *(uint8_t *)(out.writeBuf + f.addr) = j->second; break;
+            case ftWord: *(uint16_t*)(out.writeBuf + f.addr) = j->second; break;
+        }
     }
 }
 
@@ -420,20 +455,22 @@ void Compiler::processLabels()
 
 void Compiler::compileFile(const syschar_t* fileName) {
   // ???????? ?????
-  loadStringFromFile(p.source, fileName);
+  std::string source;
+  loadStringFromFile(source, fileName);
 
   // ????????? ???? ??? INCLUDE-??????
   chdirToFile(fileName);
 
   C::Tree world;
   C::CompilerPdp11 cc(*this, world);
+  C::Compiler8080 cc8080(*this, world);
   C::Parser cp(p, world);
 
   // ??? ???????
   out.clear();
   for(int s=0; s<2; s++) {
     step2 = s==1;
-    p.init(p.source.c_str());
+    p.init(source.c_str());
     out.init();
     strcpy(lastLabel, "undefined");
     while(!p.ifToken(ttEof)) {
@@ -441,8 +478,16 @@ void Compiler::compileFile(const syschar_t* fileName) {
 
       // ????????? ??????
       if(p.ifToken("{")) {
+          cp.pdp11mode = (processor == P_PDP11);
           cp.start(s);
-          cc.start(s);
+          if(processor == P_PDP11)
+          {
+            cc.start(s);
+          }
+          else
+          {
+            cc8080.start(s);
+          }
       }
       else
       {
@@ -497,7 +542,14 @@ void Compiler::disassembly(unsigned s, unsigned e)
 
         lstWriter.beforeCompileLine();
         char buf[disassemblyPdp11OutSize];
-        s += disassemblyPdp11(buf, (uint16_t*)(out.writeBuf + s), e-s, s);
+        if(processor == P_PDP11)
+        {
+            s += disassemblyPdp11(buf, (uint16_t*)(out.writeBuf + s), e-s, s);
+        }
+        else
+        {
+            s += disassembly8080(buf, (uint8_t*)(out.writeBuf + s), e-s, s);
+        }
         out.writePtr = s;
         lstWriter.afterCompileLine2();
         lstWriter.appendBuffer("    ");
