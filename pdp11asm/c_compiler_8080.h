@@ -32,12 +32,16 @@ public:
 
     Compiler8080(Compiler& _compiler, Tree& _world);    
     void compileFunction(Function* f);
-    void compileJump(NodeVar* v, int d, bool ifTrue, unsigned label);
+    void compileJump(NodeVar* v, bool ifTrue, unsigned label);
     unsigned pushAcc1();
     void popAcc(unsigned usedRegs);
     void popAccSwap(char s, unsigned usedRegs);
     void compileVar(Node* n, unsigned d, IfOpt* ifOpt=0);
     void compileBlock(Node* n);
+
+    void compileOperatorSet(NodeOperator* r, unsigned d);
+    void compileOperatorAlu(NodeOperator* r, unsigned d);
+    void compileMonoOperatorIncDec(NodeMonoOperator* o, unsigned d);
 
 public:
     void start(unsigned step);

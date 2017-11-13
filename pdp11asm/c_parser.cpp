@@ -59,7 +59,7 @@ NodeVar* Parser::getStackVar(StackVar& x)
 {
     Type t = x.type;
     if(!t.arr) t.addr++;
-    NodeConst* c = outOfMemory(new NodeConst(x.addr, t)); // curFn->name+"_"+x.name
+    NodeConst* c = outOfMemory(new NodeConst(t, x.addr, "")); // curFn->name+"_"+x.name
     if(x.arg) c->prepare = true;
     NodeVar* r = outOfMemory(new NodeOperator(c->dataType, oAdd, c, outOfMemory(new NodeSP)));
     if(!t.arr)
@@ -80,7 +80,7 @@ NodeVar* Parser::nodeConvert(NodeVar* x, Type type, bool auto_convert)
     // Константы преобразуются налету
     if(x->isConst())
     {
-        if(x->nodeType==ntConstI)
+        if(x->isConstI())
         {
             if(type.is8()) x->cast<NodeConst>()->value &= 0xFF; else //! Предупреждение о переполнении
             if(type.is16()) x->cast<NodeConst>()->value &= 0xFFFF;
@@ -124,13 +124,13 @@ NodeVar* Parser::bindVar_2()
         Type type;
         type.addr = 1;
         type.baseType = cbtChar;
-        return outOfMemory(new NodeConst(world.regString(buf.c_str()), type));
+        return outOfMemory(new NodeConst(type, 0, world.regString(buf.c_str()).c_str()));
     }    
     if(p.ifToken(ttString1)) {
-        return outOfMemory(new NodeConst((unsigned char)p.loadedText[0], cbtChar));
+        return outOfMemory(new NodeConst(cbtChar, (unsigned char)p.loadedText[0], ""));
     }
     if(p.ifToken(ttInteger)) {        
-        return outOfMemory(new NodeConst(p.loadedNum, p.loadedNum < 256 ? cbtUChar : p.loadedNum < 65536 ? cbtUShort : cbtULong)); //! Определить ти переменной
+        return outOfMemory(new NodeConst(p.loadedNum < 256 ? cbtUChar : p.loadedNum < 65536 ? cbtUShort : cbtULong, p.loadedNum, "")); //! Определить ти переменной
     }
     if(p.ifToken("sizeof")) {
         p.needToken("(");
@@ -142,7 +142,7 @@ NodeVar* Parser::bindVar_2()
             delete a;
         }
         p.needToken(")");
-        return new NodeConst(type1.size(), cbtShort);
+        return new NodeConst(cbtShort, type1.size(), "");
     }
 
     // Это либо просто скобки, либо преобразование типов
@@ -167,7 +167,7 @@ NodeVar* Parser::bindVar_2()
     GlobalVar* g = ifToken(world.globalVars);
     if(g)
     {
-        NodeConst* c = new NodeConst(g->name, g->type);
+        NodeConst* c = new NodeConst(g->type, 0, g->name.c_str());
         if(g->type.arr) return c;
         c->dataType.addr++;
         return new NodeDeaddr(c);
@@ -209,7 +209,7 @@ NodeVar* Parser::nodeOperator2(Type type, Operator o, NodeVar* a, NodeVar* b)
     if(o==oE || o==oNE || o==oG || o==oGE || o==oL || o==oLE || o==oLAnd || o==oLOr) type = cbtShort;
 
     // Операции между константами
-    if(a->nodeType==ntConstI && b->nodeType==ntConstI)
+    if(a->isConstI() && b->isConstI())
     {
         uint32_t ac = a->cast<NodeConst>()->value;
         uint32_t bc = b->cast<NodeConst>()->value;
@@ -234,20 +234,20 @@ NodeVar* Parser::nodeOperator2(Type type, Operator o, NodeVar* a, NodeVar* b)
             case oL:   ac = (ac <  bc ? 1 : 0); break;
             default: throw std::runtime_error("nodeOperator2");
         }
-        return outOfMemory(new NodeConst(ac, type));
+        return outOfMemory(new NodeConst(type, ac, ""));
     }
 
     // Умножение на единицу бессмысленно
     if(o==oMul)
     {
-        if(a->nodeType==ntConstI && a->cast<NodeConst>()->value==1) return b;
-        if(b->nodeType==ntConstI && b->cast<NodeConst>()->value==1) return a;
+        if(a->isConstI() && a->cast<NodeConst>()->value==1) return b;
+        if(b->isConstI() && b->cast<NodeConst>()->value==1) return a;
     }
 
     // Деление тоже
     if(o==oDiv)
     {
-        if(b->nodeType==ntConstI && b->cast<NodeConst>()->value==1) return a;
+        if(b->isConstI() && b->cast<NodeConst>()->value==1) return a;
     }
 
     // Фича PDP
@@ -275,7 +275,7 @@ NodeVar* Parser::nodeOperator(Operator o, NodeVar* a, NodeVar* b, bool noMul, No
     if(o==oAdd && a->dataType.addr!=0 && b->dataType.addr==0 && b->dataType.is8_16()) //! void*
     {
         b = nodeConvert(b, cbtUShort, true);
-        if(!noMul) { unsigned s = a->dataType.sizeElement(); if(s != 1) b = nodeOperator(oMul, b, new NodeConst(s, cbtUShort)); }
+        if(!noMul) { unsigned s = a->dataType.sizeElement(); if(s != 1) b = nodeOperator(oMul, b, new NodeConst(cbtUShort, s, "")); }
         return nodeOperator2(a->dataType, o, a, b);
     }
 
@@ -283,7 +283,7 @@ NodeVar* Parser::nodeOperator(Operator o, NodeVar* a, NodeVar* b, bool noMul, No
     if(o==oAdd && a->dataType.addr==0 && a->dataType.is8_16() && b->dataType.addr!=0) //! void*
     {
         a = nodeConvert(a, cbtUShort, true);
-        if(!noMul) { unsigned s = b->dataType.sizeElement(); if(s != 1) a = nodeOperator(oMul, a, new NodeConst(s, cbtUShort)); }
+        if(!noMul) { unsigned s = b->dataType.sizeElement(); if(s != 1) a = nodeOperator(oMul, a, new NodeConst(cbtUShort, s, "")); }
         return nodeOperator2(b->dataType, o, a, b);
     }
 
@@ -291,16 +291,16 @@ NodeVar* Parser::nodeOperator(Operator o, NodeVar* a, NodeVar* b, bool noMul, No
     if(o==oSub && a->dataType.addr!=0 && b->dataType.addr==0 && b->dataType.is8_16()) //! void*
     {
         b = nodeConvert(b, cbtUShort, true);
-        if(!noMul) { unsigned s = a->dataType.sizeElement(); if(s != 1) b = nodeOperator(oMul, b, new NodeConst(s, cbtUShort)); }
+        if(!noMul) { unsigned s = a->dataType.sizeElement(); if(s != 1) b = nodeOperator(oMul, b, new NodeConst(cbtUShort, s, "")); }
         return nodeOperator2(a->dataType, o, a, b);
     }
 
     // Операция между указателем и нулем
-    if(a->dataType.addr!=0 && b->dataType.addr==0 && b->nodeType==ntConstI && b->cast<NodeConst>()->isNull())
+    if(a->dataType.addr!=0 && b->dataType.addr==0 && b->isConstI() && b->cast<NodeConst>()->isNull())
         b = nodeConvert(b, a->dataType, false);
 
     // Операция между нулем и указателем
-    if(b->dataType.addr!=0 && a->dataType.addr==0 && a->nodeType==ntConstI && a->cast<NodeConst>()->isNull())
+    if(b->dataType.addr!=0 && a->dataType.addr==0 && a->isConstI() && a->cast<NodeConst>()->isNull())
         a = nodeConvert(a, b->dataType, false);
 
     // Вычитание указателя из указателя. И типы указателей идентичны
@@ -310,7 +310,7 @@ NodeVar* Parser::nodeOperator(Operator o, NodeVar* a, NodeVar* b, bool noMul, No
         if(s != 0) // Это void*
         {
             NodeVar* n = nodeOperator2(cbtUShort, o, a, b);
-            if(!noMul) if(s != 1) n = nodeOperator(oDiv, n, new NodeConst(s, cbtUShort));
+            if(!noMul) if(s != 1) n = nodeOperator(oDiv, n, new NodeConst(cbtUShort, s, ""));
             return n;
         }
     }
@@ -339,7 +339,7 @@ NodeVar* Parser::nodeOperator(Operator o, NodeVar* a, NodeVar* b, bool noMul, No
     operatorType(r, sig, b->dataType);
     // Арифметические операции между 8 битными числами дают 16 битный результат
     if(r==1 && (o==oAdd || o==oSub || o==oDiv || o==oMod || o==oMul)) r=2;
-    Type resultType = r>=4 ? (sig ? cbtLong : cbtULong) : r>=2 ? (sig ? cbtShort : cbtUShort) : (r>=1 ? cbtChar : cbtUChar);
+    Type resultType = r>=4 ? (sig ? cbtLong : cbtULong) : r>=2 ? (sig ? cbtShort : cbtUShort) : (sig ? cbtChar : cbtUChar);
 
 
     // Условный оператор
@@ -385,7 +385,7 @@ NodeVar* Parser::nodeMonoOperator(NodeVar* a, MonoOperator o)
     if(o == moAddr) return nodeAddr(a);
 
     // Моно оператор над константой
-    if(a->nodeType == ntConstI)
+    if(a->isConstI())
     {
         NodeConst* ac = a->cast<NodeConst>();
         switch((unsigned)o) {
@@ -401,6 +401,13 @@ NodeVar* Parser::nodeMonoOperator(NodeVar* a, MonoOperator o)
     if(o==moPostInc || o==moPostDec)
     {
         if(a->nodeType != ntDeaddr) p.syntaxError("Требуется переменная");
+        NodeDeaddr* aa = a->cast<NodeDeaddr>();
+        NodeVar* b = aa->var;
+        aa->var = 0;
+        delete aa;
+        NodeVar* x = new NodeMonoOperator(b, o);
+        //! x->dataType
+        return x;
     }
 
     if(o==moInc || o==moDec)
@@ -458,7 +465,7 @@ xx:         if(a->dataType.baseType!=cbtStruct || a->dataType.addr!=0 || a->data
                     a = nodeAddr(a);
                     if(si.offset != 0)
                     {
-                        a = nodeOperator(oAdd, a, new NodeConst(si.offset, cbtUShort), true);
+                        a = nodeOperator(oAdd, a, new NodeConst(cbtUShort, si.offset, 0), true);
                     }
                     if(si.type.arr)
                     {
@@ -481,7 +488,7 @@ xx:         if(a->dataType.baseType!=cbtStruct || a->dataType.addr!=0 || a->data
             NodeVar* i = readVar(-1);
             //! Проверка типов
             p.needToken("]");
-            if(i->nodeType == ntConstI && i->cast<NodeConst>()->value == 0)
+            if(i->isConstI() && i->cast<NodeConst>()->value == 0)
             {
                 delete i;
             }
@@ -560,7 +567,7 @@ NodeVar* Parser::readVar(int level)
 uint32_t Parser::readConst(const Type& to)
 {
     NodeVar* n = nodeConvert(readVar(), to, true);
-    if(n->nodeType != ntConstI) p.syntaxError("Ожидается константа"); //! ntConstS то же нужно здесь
+    if(n->isNotConstI()) p.syntaxError("Ожидается константа"); //! ntConstS то же нужно здесь
     uint32_t value = n->cast<NodeConst>()->value;
     delete n;
     return value;
@@ -1197,7 +1204,7 @@ void Parser::arrayInit(std::vector<uint8_t>& data, Type& type)
     }
 
     NodeVar* n = readVar(-1);
-    if(n->nodeType != ntConstI) p.syntaxError("Ожидается константа");
+    if(n->isNotConstI()) p.syntaxError("Ожидается константа");
     uint32_t v = n->cast<NodeConst>()->value;
     delete n;
 

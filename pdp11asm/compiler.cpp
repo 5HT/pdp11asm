@@ -442,11 +442,12 @@ void Compiler::processLabels()
         Fixup& f = fixups[i];
         std::map<std::string, Parser::num_t>::iterator j = labels.find(f.name);
         if(j == labels.end()) throw std::runtime_error("Метка "+f.name+" не найдена");
-        printf("fixup %u = %u\n", (unsigned)f.addr, (unsigned)j->second);
+        //printf("fixup %u = %u\n", (unsigned)f.addr, (unsigned)j->second);
         switch(f.type)
         {
-            case ftByte: *(uint8_t *)(out.writeBuf + f.addr) = j->second; break;
-            case ftWord: *(uint16_t*)(out.writeBuf + f.addr) = j->second; break;
+            case ftByte:     *(uint8_t *)(out.writeBuf + f.addr) = j->second; break;
+            case ftByteHigh: *(uint8_t *)(out.writeBuf + f.addr) = j->second >> 8; break;
+            case ftWord:     *(uint16_t*)(out.writeBuf + f.addr) = j->second; break;
         }
     }
 }

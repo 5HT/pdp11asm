@@ -1,11 +1,53 @@
 // PDP11 Assembler (c) 08-01-2017 ALeksey Morozov (aleksey.f.morozov@gmail.com)
 
 #include "c_asm_8080.h"
+#include <limits.h>
+#include "c_tree.h"
 
 namespace C
 {
 
-Asm8080::Asm8080(Compiler& _c) : c(_c) {
+//---------------------------------------------------------------------------------------------------------------------
+
+Asm8080::Asm8080(Compiler& _c) : c(_c), labelsCnt(0)
+{
+
+}
+
+//---------------------------------------------------------------------------------------------------------------------
+
+void Asm8080::sta(const char* name, uint16_t addr)
+{
+    c.out.write8(0x32);
+    c.addFixup(Compiler::ftWord, name);
+    c.out.write16(addr);
+}
+
+//---------------------------------------------------------------------------------------------------------------------
+
+void Asm8080::shld(const char* name, uint16_t addr)
+{
+    c.out.write8(0x22);
+    c.addFixup(Compiler::ftWord, name);
+    c.out.write16(addr);
+}
+
+//---------------------------------------------------------------------------------------------------------------------
+
+void Asm8080::lda(const char* name, uint16_t addr)
+{
+    c.out.write8(0x3A);
+    c.addFixup(Compiler::ftWord, name);
+    c.out.write16(addr);
+}
+
+//---------------------------------------------------------------------------------------------------------------------
+
+void Asm8080::lhld(const char* name, uint16_t addr)
+{
+    c.out.write8(0x2A);
+    c.addFixup(Compiler::ftWord, name);
+    c.out.write16(addr);
 }
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -13,7 +55,7 @@ Asm8080::Asm8080(Compiler& _c) : c(_c) {
 void Asm8080::call(const char* name, uint16_t addr)
 {
     c.out.write8(0xCD);
-    if(step==1 && name[0] != 0) c.addFixup(Compiler::ftWord, ucase(name)); //! Так нельзя
+    if(name[0] != 0) c.addFixup(Compiler::ftWord, ucase(name));
     c.out.write16(addr);
 }
 
@@ -21,16 +63,7 @@ void Asm8080::call(const char* name, uint16_t addr)
 
 void Asm8080::addLocalFixup(unsigned label)
 {
-    if(step==1)
-    {
-        if(fs >= fixups.size()) throw std::runtime_error("fixup0");
-        fixups[fs].addr = c.out.writePtr;
-        fs++;
-    }
-    else
-    {
-        fixups.push_back(Fixup(c.out.writePtr, label, 3));
-    }
+    fixups.push_back(Fixup(c.out.writePtr, label));
 }
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -43,57 +76,31 @@ void Asm8080::addLocalLabel(unsigned n)
 
 //---------------------------------------------------------------------------------------------------------------------
 
-void Asm8080::step0()
+void Asm8080::setJumpAddresses()
 {
-    fs = 0;
-    step = 0;
-    step_pos = c.out.writePtr;
-    step_mac = c.out.max;
-    labelsCnt = 0;
-    labels.clear();
-    fixups.clear();
-}
-
-//---------------------------------------------------------------------------------------------------------------------
-
-void Asm8080::step1()
-{
-    fs = 0;
-    step = 1;
-    labelsCnt = 0;
-    c.out.writePtr = step_pos;
-    c.out.max = step_mac;
-}
-
-//---------------------------------------------------------------------------------------------------------------------
-
-void Asm8080::step2()
-{
-    for(unsigned i=0; i<fixups.size(); i++)
+    for(auto& f : fixups)
     {
-        Fixup& f = fixups[i];
-        if(f.label >= labels.size()) throw std::runtime_error("fixup1");
-        unsigned lp = labels[f.label];
-        if(lp == (unsigned)-1) throw std::runtime_error("fixup2");
-        *(uint16_t*)(c.out.writeBuf + f.addr) = lp;
+        if(f.label >= labels.size()) throw std::runtime_error("Asm8080.setJumpAddresses 1");
+        unsigned ptr = labels[f.label];
+        if(ptr == UINT_MAX) throw std::runtime_error("Asm8080.setJumpAddresses 2");
+        if(f.addr + sizeof(uint16_t) > sizeof(c.out.writeBuf)) throw std::runtime_error("Asm8080.setJumpAddresses 3");
+        *(uint16_t*)(c.out.writeBuf + f.addr) = ptr;
     }
 }
 
 //---------------------------------------------------------------------------------------------------------------------
 
-void Asm8080::addFixup(unsigned label)
+void Asm8080::cpi(unsigned cond, uint8_t imm, const char* name)
 {
-    // Второй проход
-    if(step == 1)
+    if(imm == 0 && name[0]==0 && (cond == oE || cond == oNE))
     {
-        if(fs >= fixups.size()) throw std::runtime_error("fixup0");
-        Fixup& f = fixups[fs];
-        f.addr = c.out.writePtr;
-        fs++;
-        return;
+        ora(r8_a);
     }
-
-    fixups.push_back(Fixup(c.out.writePtr, label, 0));
+    else
+    {
+        cpi_(imm);
+        c.addFixup(Compiler::ftByte, name, -1);
+    }
 }
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -107,7 +114,7 @@ void Asm8080::mov_argN_ptr1(char pf, unsigned a)
             break;
         case 'W':
             if(a==0)
-            {
+            {                
                 mov(Asm8080::r8_d, Asm8080::r8_m);
                 inx(Asm8080::r16_hl);
                 mov(Asm8080::r8_h, Asm8080::r8_m);
@@ -146,17 +153,20 @@ void Asm8080::mov_ptr1_arg2(char pf)
 
 //---------------------------------------------------------------------------------------------------------------------
 
-void Asm8080::mov_ptr1_imm(char pf, unsigned value)
+void Asm8080::mov_ptr1_imm(char pf, unsigned value, const char* name)
 {
     switch(pf)
     {
         case 'B':
             mvi(Asm8080::r8_m, value);
+            c.addFixup(Compiler::ftByte, name, -1);
             return;
         case 'W':
             mvi(Asm8080::r8_m, value);
+            c.addFixup(Compiler::ftByte, name, -1);
             inx(Asm8080::r16_hl);
             mvi(Asm8080::r8_m, value >> 8);
+            c.addFixup(Compiler::ftByteHigh, name, -1);
             return;
         default:
             throw;
@@ -180,5 +190,216 @@ void Asm8080::mov_argN_imm(char pf, unsigned d, unsigned value)
     }
 }
 
+//---------------------------------------------------------------------------------------------------------------------
+
+void Asm8080::jmp_cc(unsigned cond, unsigned sign, unsigned label)
+{
+    switch(cond)
+    {
+        case oE:
+            jz(label);
+            break;
+        case oNE:
+            jnz(label);
+            break;
+        case oL:
+            if(sign) throw;
+            jc(label);
+            break;
+        case oGE:
+            if(sign) throw;
+            jnc(label);
+            break;
+        case oG:
+            if(sign) throw;
+            jz(labelsCnt);
+            jnc(label);
+            addLocalLabel(labelsCnt++);
+            break;
+        case oLE:
+            if(sign) throw;
+            jc(label);
+            jz(label);
+            break;
+        default:
+            throw;
+    }
 }
 
+//---------------------------------------------------------------------------------------------------------------------
+
+void Asm8080::alu_arg1_arg2(char pf, unsigned o)
+{
+    switch(pf)
+    {
+        case 'B':
+            switch(o)
+            {
+                case oSAdd: case oAdd: add(Asm8080::r8_e); break;
+                case oSSub: case oSub: sub(Asm8080::r8_e); break;
+                case oSAnd: case oAnd: ana(Asm8080::r8_e); break;
+                case oSOr:  case oOr:  ora(Asm8080::r8_e); break;
+                case oSXor: case oXor: xra(Asm8080::r8_e); break;
+                case oSShl: case oShl: call("__SHL8");     break;
+                case oSShr: case oShr: call("__SHR8");     break;
+                case oSMul: case oMul: call("__MUL8");     break;
+                case oSDiv: case oDiv: call("__DIV8");     break;
+                case oSMod: case oMod: call("__MOD8");     break;
+                default: throw;
+            }
+            break;
+        case 'W':
+            switch(o)
+            {
+                case oSAdd: case oAdd: dad(Asm8080::r16_de); break;
+                case oSSub: case oSub: call("__SUB16");      break;
+                case oSAnd: case oAnd: call("__AND16");      break;
+                case oSOr:  case oOr:  call("__OR16");       break;
+                case oSXor: case oXor: call("__XOR16");      break;
+                case oSShl: case oShl: call("__SHL16");      break;
+                case oSShr: case oShr: call("__SHR16");      break;
+                case oSMul: case oMul: call("__MUL16");      break;
+                case oSDiv: case oDiv: call("__DIV16");      break;
+                case oSMod: case oMod: call("__MOD16");      break;
+                default: throw;
+            }
+            break;
+        default:
+            throw;
+    }
+}
+
+//---------------------------------------------------------------------------------------------------------------------
+
+void Asm8080::alu_byte_arg1_imm(unsigned o, uint8_t value, const char* name)
+{
+    switch(o)
+    {
+        case oAdd: adi(value); break;
+        case oSub: sui(value); break;
+        case oAnd: ani(value); break;
+        case oOr:  ori(value); break;
+        case oXor: xri(value); break;
+        case oShl: throw "SHL8CONST";
+        case oShr: throw "SHR8CONST";
+        default: throw;
+    }
+    c.addFixup(Compiler::ftByte, name, -1);
+}
+
+//---------------------------------------------------------------------------------------------------------------------
+
+void Asm8080::alu_byte_arg1_pimm(unsigned o, uint16_t imm, const char* name)
+{
+    lxi(Asm8080::r16_hl, imm, name);
+    switch(o)
+    {
+        case oAdd: add(r8_m); break;
+        case oSub: sub(r8_m); break;
+        case oAnd: ana(r8_m); break;
+        case oOr:  ora(r8_m); break;
+        case oXor: xra(r8_m); break;
+        default: throw;
+    }
+}
+
+//---------------------------------------------------------------------------------------------------------------------
+
+bool Asm8080::post_inc(char pf, unsigned o, unsigned s, unsigned d)
+{
+    bool inc = (o==moPostInc || o==moIncVoid);
+    switch(pf)
+    {
+        case 'B':
+            if(s != 1) throw;
+            if(o!=moIncVoid && o!=moDecVoid) mov(d ? Asm8080::r8_e : Asm8080::r8_a, Asm8080::r8_m);
+            if(inc) inr(Asm8080::r8_m); else dcr(Asm8080::r8_m);
+            return false;
+        case 'W':
+            lxi(Asm8080::r16_de, inc ? s : -s);
+            call("__PADD16");
+            return true;
+        default:
+            throw;
+    }
+}
+
+//---------------------------------------------------------------------------------------------------------------------
+
+void Asm8080::inc_pimm(char pf, int value, unsigned addr, const char* name)
+{
+    switch(pf)
+    {
+        case 'B':
+            lda(name, addr);
+            for(;value > 0; value--) inr(r8_a);
+            for(;value < 0; value++) dcr(r8_a);
+            sta(name, addr);
+            break;
+        case 'W':
+            lhld(name, addr);
+            for(;value > 0; value--) inx(r16_hl);
+            for(;value < 0; value++) dcx(r16_hl);
+            shld(name, addr);
+            break;
+        default:
+            throw;
+    }
+}
+
+//---------------------------------------------------------------------------------------------------------------------
+
+void Asm8080::pre_inc(char pf, unsigned o, unsigned s)
+{
+    switch(pf)
+    {
+        case 'B':
+            if(s != 1) throw;
+            if(o==moInc) inr(Asm8080::r8_m); else dcr(Asm8080::r8_m);
+            break;
+        case 'W':
+            lxi(Asm8080::r16_de, o==moInc ? s : -s);
+            call("__SADD16");
+            break;
+        default:
+            throw;
+    }
+}
+
+//---------------------------------------------------------------------------------------------------------------------
+
+void Asm8080::mov_pimm_arg1(char pf, const char* name, uint16_t addr)
+{
+    switch(pf)
+    {
+        case 'B':
+            sta(name, addr);
+            break;
+        case 'W':
+            shld(name, addr);
+        break;
+        default:
+            throw;
+    }
+}
+
+//---------------------------------------------------------------------------------------------------------------------
+
+void Asm8080::mov_arg1_pimm(char pf, const char* name, uint16_t addr)
+{
+    switch(pf)
+    {
+        case 'B':
+            lda(name, addr);
+            break;
+        case 'W':
+            lhld(name, addr);
+        break;
+        default:
+            throw;
+    }
+}
+
+//---------------------------------------------------------------------------------------------------------------------
+
+} // namespace C

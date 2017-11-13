@@ -61,7 +61,7 @@ public:
     bool compileLine_8080();
     unsigned disassembly8080(char* out, uint8_t* x, unsigned l, unsigned pos);
 
-    enum FixupType { ftWord, ftByte };
+    enum FixupType { ftWord, ftByte, ftByteHigh };
 
     class Fixup {
     public:
@@ -76,6 +76,7 @@ public:
 
     inline void addFixup(FixupType type, const std::string& name, unsigned d=0)
     {
+        if(name.empty()) return;
         fixups.push_back(Fixup(type, out.writePtr-d, ucase(name)));
     }
 

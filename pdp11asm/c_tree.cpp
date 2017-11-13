@@ -31,10 +31,10 @@ unsigned Type::sizeElement()
 
 unsigned Type::sizeForInc()
 {
-    if(addr==0) return 1;
-    addr--;
+    if(addr<1) return 1;
+    addr-=1;
     int s = sizeAsPtr();
-    addr++;
+    addr+=1;
     return s;
 }
 
@@ -214,8 +214,7 @@ void TreePrepare::prepare(Node* n)
     {
         switch(n->nodeType)
         {
-            case ntConstI:
-            case ntConstS:
+            case ntConst:
             {
                 NodeConst* c = n->cast<NodeConst>();
                 if(c->prepare)
@@ -341,4 +340,15 @@ NodeJmp* Tree::allocJmp(NodeLabel* label, NodeVar* cond, bool ifFalse)
 
     return outOfMemory(new NodeJmp(label, cond, ifFalse));
 }
+
+bool Node::isConstI()
+{
+    return nodeType==ntConst && cast<NodeConst>()->text.empty();
+}
+
+bool Node::isDeaddrConst()
+{
+    return nodeType==ntDeaddr && cast<NodeDeaddr>()->var->nodeType==ntConst;
+}
+
 }

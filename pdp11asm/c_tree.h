@@ -15,15 +15,15 @@
 namespace C
 {
     enum BaseType {
-        cbtError,
-        cbtVoid,
-        cbtStruct,
-        cbtChar,
-        cbtShort,
-        cbtLong,
-        cbtUChar,
-        cbtUShort,
-        cbtULong
+        cbtError,   // 0
+        cbtVoid,    // 1
+        cbtStruct,  // 2
+        cbtChar,    // 3
+        cbtShort,   // 4
+        cbtLong,    // 5
+        cbtUChar,   // 6
+        cbtUShort,  // 7
+        cbtULong    // 8
     };
 
     struct Struct;
@@ -58,7 +58,6 @@ namespace C
 
         inline char b()
         {
-            char pf;
             if(is8()) return 'B';
             if(is16()) return 'W';
             throw std::runtime_error("int");
@@ -76,7 +75,7 @@ namespace C
     };
 
     enum NodeType {
-      ntConstI, ntConstS, ntConvert, ntCall, ntDeaddr, ntSwitch, ntLabel,
+      ntConst, ntConvert, ntCall, ntDeaddr, ntSwitch, ntLabel,
       ntReturn, ntMonoOperator, ntOperator, ntOperatorIf, ntJmp, ntIf, ntAsm, ntSP
     };
 
@@ -114,7 +113,10 @@ namespace C
         Node() { next=0; }
         ~Node() { delete next; }
         template<class T> T* cast() { return (T*)this; }
-        bool isConst() { return nodeType==ntConstI || nodeType==ntConstS; }
+        bool isConst() { return nodeType==ntConst; }
+        bool isConstI();
+        bool isDeaddrConst();
+        bool isNotConstI() { return !isConstI(); }
     };
 
     class NodeVar : public Node {
@@ -212,18 +214,10 @@ namespace C
         bool        prepare;
         std::string text;
 
-        NodeConst(const std::string& _text, Type _dataType) {
-            nodeType = ntConstS;
+        NodeConst(Type _dataType, uint32_t _value, const char* _text) {
+            nodeType = ntConst;
             dataType = _dataType;
             text     = _text;
-            value    = 0;
-            prepare  = false;
-        }
-
-        NodeConst(uint32_t _value, Type _dataType)
-        {
-            nodeType = ntConstI;
-            dataType = _dataType;
             value    = _value;
             prepare  = false;
         }

@@ -170,7 +170,7 @@ unsigned Compiler::disassembly8080(char* out, uint8_t* x, unsigned l, unsigned p
             case C_I8:
                 if(y == c.opcode)
                 {
-                    snprintf(out, disassemblyPdp11OutSize, "%s %u", c.name, *x);
+                    snprintf(out, disassemblyPdp11OutSize, "%s 0%Xh", c.name, *x);
                     return 2;
                 }
                 break;
@@ -178,7 +178,7 @@ unsigned Compiler::disassembly8080(char* out, uint8_t* x, unsigned l, unsigned p
             case C_I16:
                 if(y == c.opcode)
                 {
-                    snprintf(out, disassemblyPdp11OutSize, "%s %u", c.name, *(uint16_t*)x);
+                    snprintf(out, disassemblyPdp11OutSize, "%s 0%Xh", c.name, *(uint16_t*)x);
                     return 3;
                 }
                 break;
@@ -186,7 +186,7 @@ unsigned Compiler::disassembly8080(char* out, uint8_t* x, unsigned l, unsigned p
             case C_R16I16:
                 if((y & ~(3 << c.shl)) == c.opcode)
                 {
-                    snprintf(out, disassemblyPdp11OutSize, "%s %s, %u", c.name, r16[(y >> c.shl) & 3], *(uint16_t*)x);
+                    snprintf(out, disassemblyPdp11OutSize, "%s %s, 0%Xh", c.name, r16[(y >> c.shl) & 3], *(uint16_t*)x);
                     return 3;
                 }
                 break;
@@ -194,7 +194,7 @@ unsigned Compiler::disassembly8080(char* out, uint8_t* x, unsigned l, unsigned p
             case C_R8I8:
                 if((y & ~(7 << c.shl)) == c.opcode)
                 {
-                    snprintf(out, disassemblyPdp11OutSize, "%s %s, %u", c.name, r8[(y >> c.shl) & 7], *x);
+                    snprintf(out, disassemblyPdp11OutSize, "%s %s, 0%Xh", c.name, r8[(y >> c.shl) & 7], *x);
                     return 2;
                 }
                 break;
@@ -210,7 +210,7 @@ unsigned Compiler::disassembly8080(char* out, uint8_t* x, unsigned l, unsigned p
             case C_I8X:
                 if((y & ~0x38) == c.opcode)
                 {
-                    snprintf(out, disassemblyPdp11OutSize, "%s %u", c.name, *x & 0x38);
+                    snprintf(out, disassemblyPdp11OutSize, "%s 0%Xh", c.name, *x & 0x38);
                     return 1;
                 }
                 break;

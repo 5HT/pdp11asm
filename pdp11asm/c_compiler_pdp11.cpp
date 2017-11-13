@@ -71,16 +71,15 @@ bool CompilerPdp11::compileArg(bool check, Arg11& ol, Arg11& oh, NodeVar* a, int
     }
 
     // Число можно разместить в аргументе
-    if(a->nodeType == ntConstI)
+    if(a->nodeType == ntConst)
     {
-        unsigned v = a->cast<NodeConst>()->value;
-        ol = Arg11(atValue, 0, v & 0xFFFF);
-        oh = Arg11(atValue, 0, v >> 16);
-        return false;
-    }
-
-    if(a->nodeType == ntConstS)
-    {
+        if(a->cast<NodeConst>()->text.empty())
+        {
+            unsigned v = a->cast<NodeConst>()->value;
+            ol = Arg11(atValue, 0, v & 0xFFFF);
+            oh = Arg11(atValue, 0, v >> 16);
+            return false;
+        }
         ol.type = atValue;
         ol.str = a->cast<NodeConst>()->text;
         ol.value = 0;        
@@ -98,16 +97,16 @@ bool CompilerPdp11::compileArg(bool check, Arg11& ol, Arg11& oh, NodeVar* a, int
             b = ((NodeConvert*)b)->var;
 
         // Оптимизация Deaddr(Const) одной командой
-        if(b->nodeType == ntConstI)
+        if(b->nodeType == ntConst)
         {
-            ol.type = atValueMem;
-            ol.value = b->cast<NodeConst>()->value;
-            oh.type = atValueMem;
-            oh.value = b->cast<NodeConst>()->value + 2;
-            return false;
-        }
-        if(b->nodeType == ntConstS)
-        {
+            if(b->cast<NodeConst>()->text.empty())
+            {
+                ol.type = atValueMem;
+                ol.value = b->cast<NodeConst>()->value;
+                oh.type = atValueMem;
+                oh.value = b->cast<NodeConst>()->value + 2;
+                return false;
+            }
             ol.type = atValueMem;
             ol.value = 0;
             ol.str = b->cast<NodeConst>()->text;
@@ -132,8 +131,8 @@ bool CompilerPdp11::compileArg(bool check, Arg11& ol, Arg11& oh, NodeVar* a, int
             NodeOperator* e = b->cast<NodeOperator>();
             if(e->o == oAdd)
             {
-                if(e->a->nodeType != ntConstI && e->b->nodeType == ntConstI) std::swap(e->a, e->b);
-                if(e->a->nodeType == ntConstI)
+                if(e->a->isNotConstI() && e->b->isConstI()) std::swap(e->a, e->b);
+                if(e->a->isConstI())
                 {
                     int off = e->a->cast<NodeConst>()->value;
                     if(e->b->nodeType == ntSP) // Оптимизация Deaddr(Add(Const,SP)) одной командой
@@ -289,8 +288,15 @@ void CompilerPdp11::compileVar(Node* n, unsigned d, IfOpt* ifOpt)
             if(inStack) out.cmd(cmdAdd, Arg11(atValue, 0, inStack), Arg11::sp);
             return;
 
-        case ntConstI: // Числовая константа
+        case ntConst: // Числовая константа
         {
+            if(!n->cast<NodeConst>()->text.empty())
+            {
+                out.cmd(cmdMov, Arg11::null, Arg11(atReg, d));
+                if(out.step==1) out.c.addFixup(Compiler::ftWord, n->cast<NodeConst>()->text.c_str(), 2);
+                return;
+            }
+
             NodeConst* c = (NodeConst*)n;
             char pf;
             if(c->dataType.is8()) pf='B'; else
@@ -304,11 +310,6 @@ void CompilerPdp11::compileVar(Node* n, unsigned d, IfOpt* ifOpt)
             if(pf=='D') out.cmd(cmdMov, ah, Arg11(atReg, d+2));
             return;
         }
-
-        case ntConstS: // Константа
-            out.cmd(cmdMov, Arg11::null, Arg11(atReg, d));
-            if(out.step==1) out.c.addFixup(Compiler::ftWord, n->cast<NodeConst>()->text.c_str(), 2);
-            return;
 
         case ntConvert: // Преобразование типов
         {
@@ -881,7 +882,7 @@ void CompilerPdp11::compileVar(Node* n, unsigned d, IfOpt* ifOpt)
 
 bool CompilerPdp11::can_shift(NodeOperator* r)
 {
-    if(r->b->nodeType != ntConstI) return false;
+    if(r->b->isNotConstI()) return false;
     unsigned v = r->b->cast<NodeConst>()->value;
     if(v == 0) return true; // Сдвиг не требуется
     if(r->dataType.is8()) return true;
