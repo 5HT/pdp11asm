@@ -28,6 +28,8 @@ namespace C
 
     struct Struct;
 
+    class GlobalVar;
+
     class Type {
     public:
         BaseType baseType;
@@ -213,8 +215,10 @@ namespace C
         uint32_t    value;
         bool        prepare;
         std::string text;
+        GlobalVar*  uid;
 
         NodeConst(Type _dataType, uint32_t _value, const char* _text) {
+            uid      = 0;
             nodeType = ntConst;
             dataType = _dataType;
             text     = _text;
@@ -307,7 +311,8 @@ namespace C
             dataType.addr--;
         }
 
-        NodeDeaddr(NodeVar* _var, Type t) {
+        NodeDeaddr(NodeVar* _var, Type t)
+        {
             nodeType = ntDeaddr;
             var = _var;
             dataType = t;

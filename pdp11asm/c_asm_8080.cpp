@@ -9,42 +9,94 @@ namespace C
 
 //---------------------------------------------------------------------------------------------------------------------
 
-Asm8080::Asm8080(Compiler& _c) : c(_c), labelsCnt(0)
+Asm8080::Asm8080(Compiler& _c) : c(_c), in(this), labelsCnt(0)
 {
-
 }
 
 //---------------------------------------------------------------------------------------------------------------------
 
-void Asm8080::sta(const char* name, uint16_t addr)
+void Asm8080::sta(const char* name, uint16_t addr, GlobalVar* uid)
 {
-    c.out.write8(0x32);
+    in.a.save(name, addr, uid);
+
+    /*
+    // Если в HL находится адрес переменной, то можно использовать более короткую команду
+    if(uid && in.hl.value == false && in.hl.uid == uid)
+    {
+        mov(r8_m, r8_a);
+    }
+    else
+    {
+        in.a.save(name, addr, uid);
+        // STA
+        c.out.write8(0x32);
+        c.addFixup(Compiler::ftWord, name);
+        c.out.write16(addr);
+    }
+
+    // Теперь в A находится тоже значение, что и в переменной
+    in.a.setValue(uid);
+    */
+}
+
+//---------------------------------------------------------------------------------------------------------------------
+
+void Asm8080::lxi(r16 arg, uint16_t imm, const char* name, GlobalVar* uid)
+{
+    // Выходим, если в DE находится нужный адрес
+    if(in.setAddr(arg, uid)) return;
+
+    c.out.write8(0x01 | (arg << 4));
     c.addFixup(Compiler::ftWord, name);
-    c.out.write16(addr);
+    c.out.write16(imm);
 }
 
 //---------------------------------------------------------------------------------------------------------------------
 
-void Asm8080::shld(const char* name, uint16_t addr)
+void Asm8080::shld(const char* name, uint16_t addr, GlobalVar* uid)
 {
+    in.hl.save(name, addr, uid);
+
+    /*
+    // SHLD
     c.out.write8(0x22);
     c.addFixup(Compiler::ftWord, name);
     c.out.write16(addr);
+
+    // Теперь в HL находится то же значение, что и в переменной
+    in.hl.setValue(uid);
+    */
 }
 
 //---------------------------------------------------------------------------------------------------------------------
 
-void Asm8080::lda(const char* name, uint16_t addr)
+void Asm8080::lda(const char* name, uint16_t addr, GlobalVar* uid)
 {
-    c.out.write8(0x3A);
-    c.addFixup(Compiler::ftWord, name);
-    c.out.write16(addr);
+    // Выходим, если в A находится нужная переменная
+    if(in.a.setValue(uid)) return;
+
+    // Если в HL находится адрес переменной, то можно использовать более короткую команду
+    if(uid && in.hl.value == false && in.hl.uid == uid)
+    {
+        c.out.write8(0x40 | (r8_a << 3) | r8_m); // mov(r8_a, r8_m);
+    }
+    else
+    {
+        // LDA
+        c.out.write8(0x3A);
+        c.out.write16(addr);
+        c.addFixup(Compiler::ftWord, name, 2);
+    }
 }
 
 //---------------------------------------------------------------------------------------------------------------------
 
-void Asm8080::lhld(const char* name, uint16_t addr)
+void Asm8080::lhld(const char* name, uint16_t addr, GlobalVar* uid)
 {
+    // Если в HL находится нужная переменная
+    if(in.hl.setValue(uid)) return;
+
+    // LHLD
     c.out.write8(0x2A);
     c.addFixup(Compiler::ftWord, name);
     c.out.write16(addr);
@@ -53,10 +105,17 @@ void Asm8080::lhld(const char* name, uint16_t addr)
 //---------------------------------------------------------------------------------------------------------------------
 
 void Asm8080::call(const char* name, uint16_t addr)
-{
+{   
+    // Сохранить все переменные
+    in.flush();
+
+    // CALL
     c.out.write8(0xCD);
     if(name[0] != 0) c.addFixup(Compiler::ftWord, ucase(name));
     c.out.write16(addr);
+
+    // Регистры могут быть испорчены
+    in.no();
 }
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -70,35 +129,30 @@ void Asm8080::addLocalFixup(unsigned label)
 
 void Asm8080::addLocalLabel(unsigned n)
 {
+    // Сохранить все переменные
+    in.flush();
+
     assure_and_fast_null(labels, n);
     labels[n] = c.out.writePtr;
-}
 
-//---------------------------------------------------------------------------------------------------------------------
-
-void Asm8080::setJumpAddresses()
-{
-    for(auto& f : fixups)
-    {
-        if(f.label >= labels.size()) throw std::runtime_error("Asm8080.setJumpAddresses 1");
-        unsigned ptr = labels[f.label];
-        if(ptr == UINT_MAX) throw std::runtime_error("Asm8080.setJumpAddresses 2");
-        if(f.addr + sizeof(uint16_t) > sizeof(c.out.writeBuf)) throw std::runtime_error("Asm8080.setJumpAddresses 3");
-        *(uint16_t*)(c.out.writeBuf + f.addr) = ptr;
-    }
+    // Состояние регистров не определено
+    in.no();
 }
 
 //---------------------------------------------------------------------------------------------------------------------
 
 void Asm8080::cpi(unsigned cond, uint8_t imm, const char* name)
 {
+    // Если нас интересует ==0 или !=0, то можно использовать более короткую команду
     if(imm == 0 && name[0]==0 && (cond == oE || cond == oNE))
     {
         ora(r8_a);
     }
     else
     {
-        cpi_(imm);
+        // CPI
+        c.out.write8(0xFE);
+        c.out.write8(imm);
         c.addFixup(Compiler::ftByte, name, -1);
     }
 }
@@ -159,14 +213,14 @@ void Asm8080::mov_ptr1_imm(char pf, unsigned value, const char* name)
     {
         case 'B':
             mvi(Asm8080::r8_m, value);
-            c.addFixup(Compiler::ftByte, name, -1);
+            c.addFixup(Compiler::ftByte, name, 1);
             return;
         case 'W':
             mvi(Asm8080::r8_m, value);
-            c.addFixup(Compiler::ftByte, name, -1);
+            c.addFixup(Compiler::ftByte, name, 1);
             inx(Asm8080::r16_hl);
             mvi(Asm8080::r8_m, value >> 8);
-            c.addFixup(Compiler::ftByteHigh, name, -1);
+            c.addFixup(Compiler::ftByteHigh, name, 1);
             return;
         default:
             throw;
@@ -175,7 +229,7 @@ void Asm8080::mov_ptr1_imm(char pf, unsigned value, const char* name)
 
 //---------------------------------------------------------------------------------------------------------------------
 
-void Asm8080::mov_argN_imm(char pf, unsigned d, unsigned value)
+void Asm8080::mov_argN_imm(char pf, unsigned d, unsigned value, GlobalVar* uid)
 {
     switch(pf)
     {
@@ -183,7 +237,7 @@ void Asm8080::mov_argN_imm(char pf, unsigned d, unsigned value)
             mvi(d ? Asm8080::r8_e : Asm8080::r8_a, value);
             break;
         case 'W':
-            lxi(d ? Asm8080::r16_de : Asm8080::r16_hl, value);
+            lxi(d ? Asm8080::r16_de : Asm8080::r16_hl, value, "", uid);
             break;
         default:
             throw;
@@ -284,7 +338,7 @@ void Asm8080::alu_byte_arg1_imm(unsigned o, uint8_t value, const char* name)
         case oShr: throw "SHR8CONST";
         default: throw;
     }
-    c.addFixup(Compiler::ftByte, name, -1);
+    c.addFixup(Compiler::ftByte, name, 1);
 }
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -326,18 +380,18 @@ bool Asm8080::post_inc(char pf, unsigned o, unsigned s, unsigned d)
 
 //---------------------------------------------------------------------------------------------------------------------
 
-void Asm8080::inc_pimm(char pf, int value, unsigned addr, const char* name)
+void Asm8080::inc_pimm(char pf, int value, unsigned addr, const char* name, GlobalVar* uid)
 {
     switch(pf)
     {
         case 'B':
-            lda(name, addr);
+            lda(name, addr, uid);
             for(;value > 0; value--) inr(r8_a);
             for(;value < 0; value++) dcr(r8_a);
-            sta(name, addr);
+            sta(name, addr, uid);
             break;
         case 'W':
-            lhld(name, addr);
+            lhld(name, addr, uid);
             for(;value > 0; value--) inx(r16_hl);
             for(;value < 0; value++) dcx(r16_hl);
             shld(name, addr);
@@ -368,16 +422,16 @@ void Asm8080::pre_inc(char pf, unsigned o, unsigned s)
 
 //---------------------------------------------------------------------------------------------------------------------
 
-void Asm8080::mov_pimm_arg1(char pf, const char* name, uint16_t addr)
+void Asm8080::mov_pimm_arg1(char pf, const char* name, uint16_t addr, GlobalVar* uid)
 {
     switch(pf)
     {
         case 'B':
-            sta(name, addr);
+            sta(name, addr, uid);
             break;
         case 'W':
             shld(name, addr);
-        break;
+            break;
         default:
             throw;
     }
@@ -385,19 +439,63 @@ void Asm8080::mov_pimm_arg1(char pf, const char* name, uint16_t addr)
 
 //---------------------------------------------------------------------------------------------------------------------
 
-void Asm8080::mov_arg1_pimm(char pf, const char* name, uint16_t addr)
+void Asm8080::mov_arg1_pimm(char pf, const char* name, uint16_t addr, GlobalVar* uid)
 {
     switch(pf)
     {
         case 'B':
-            lda(name, addr);
+            lda(name, addr, uid);
             break;
         case 'W':
-            lhld(name, addr);
-        break;
+            lhld(name, addr, uid);
+            break;
         default:
             throw;
     }
+}
+
+//---------------------------------------------------------------------------------------------------------------------
+
+void Asm8080::setJumpAddresses()
+{
+    for(auto& f : fixups)
+    {
+        if(f.label >= labels.size()) throw std::runtime_error("Asm8080.setJumpAddresses 1");
+        unsigned ptr = labels[f.label];
+        if(ptr == UINT_MAX) throw std::runtime_error("Asm8080.setJumpAddresses 2");
+        if(f.addr + sizeof(uint16_t) > sizeof(c.out.writeBuf)) throw std::runtime_error("Asm8080.setJumpAddresses 3");
+        *(uint16_t*)(c.out.writeBuf + f.addr) = ptr;
+    }
+}
+
+//---------------------------------------------------------------------------------------------------------------------
+
+void Asm8080::realSave(char id, uint16_t addr, const char* name, GlobalVar* uid)
+{
+    switch(id)
+    {
+        case 'a':
+            // STA
+            c.out.write8(0x32);
+            c.addFixup(Compiler::ftWord, name);
+            c.out.write16(addr);
+            // Теперь в A находится тоже значение, что и в переменной
+            in.a.uid=uid;
+            in.a.value=true;
+            break;
+        case 'H':
+            // SHLD
+            c.out.write8(0x22);
+            c.addFixup(Compiler::ftWord, name);
+            c.out.write16(addr);
+            // Теперь в HL находится тоже значение, что и в переменной
+            in.hl.uid=uid;
+            in.hl.value=true;
+        default:
+            throw;
+    }
+
+    //
 }
 
 //---------------------------------------------------------------------------------------------------------------------

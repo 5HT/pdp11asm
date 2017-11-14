@@ -169,6 +169,7 @@ NodeVar* Parser::bindVar_2()
     {
         NodeConst* c = new NodeConst(g->type, 0, g->name.c_str());
         if(g->type.arr) return c;
+        c->uid = g;
         c->dataType.addr++;
         return new NodeDeaddr(c);
     }

@@ -285,8 +285,7 @@ void Compiler8080::compileVar(Node* n, unsigned d, IfOpt* ifOpt)
             }
             else if(c->dataType.is16())
             {
-                out.lxi(d ? Asm8080::r16_de : Asm8080::r16_hl, 0);
-                out.c.addFixup(Compiler::ftWord, n->cast<NodeConst>()->text.c_str(), 2);
+                out.lxi(d ? Asm8080::r16_de : Asm8080::r16_hl, 0, c->text.c_str(), c->uid);
             }
             else
             {
@@ -457,7 +456,7 @@ void Compiler8080::compileVar(Node* n, unsigned d, IfOpt* ifOpt)
             if(c->var->nodeType == ntConst)
             {
                 NodeConst* v = c->var->cast<NodeConst>();
-                out.mov_arg1_pimm(c->dataType.b(), v->text.c_str(), v->value);
+                out.mov_arg1_pimm(c->dataType.b(), v->text.c_str(), v->value, v->uid);
                 if(d==1) popAccSwap(c->dataType.b(), ur);
             }
             else
@@ -520,7 +519,7 @@ void Compiler8080::compileVar(Node* n, unsigned d, IfOpt* ifOpt)
                 if(o->a->isConst() && incSize<=2)
                 {
                     NodeConst* co = o->a->cast<NodeConst>();
-                    out.inc_pimm(t.b(), o->o==moIncVoid ? incSize : -incSize, co->value, co->text.c_str());
+                    out.inc_pimm(t.b(), o->o==moIncVoid ? incSize : -incSize, co->value, co->text.c_str(), co->uid);
                 }
                 else
                 {
@@ -672,7 +671,8 @@ void Compiler8080::compileVar(Node* n, unsigned d, IfOpt* ifOpt)
             {
                 // Ссылка в значениях
                 if(r->a->nodeType != ntDeaddr) throw std::runtime_error("monoOperator !deaddr (%u)" + i2s(r->a->nodeType));
-                NodeVar* a1 = r->a->cast<NodeDeaddr>()->var;
+                NodeDeaddr* de = r->a->cast<NodeDeaddr>();
+                NodeVar* a1 = de->var;
 
                 //! Поместить результат в D!
                 //! Вообще не помещать результат
@@ -680,7 +680,7 @@ void Compiler8080::compileVar(Node* n, unsigned d, IfOpt* ifOpt)
                 if(a1->isConst())
                 {
                     NodeConst* co = a1->cast<NodeConst>();
-                    out.mov_arg1_pimm(t.b(), co->text.c_str(), co->value);
+                    out.mov_arg1_pimm(t.b(), co->text.c_str(), co->value, co->uid);
                 }
                 else
                 {
@@ -708,7 +708,7 @@ void Compiler8080::compileVar(Node* n, unsigned d, IfOpt* ifOpt)
                 if(a1->isConst())
                 {
                     NodeConst* co = a1->cast<NodeConst>();
-                    out.mov_pimm_arg1(t.b(), co->text.c_str(), co->value);
+                    out.mov_pimm_arg1(t.b(), co->text.c_str(), co->value, co->uid);
                 }
                 else
                 if(pf=='B')
