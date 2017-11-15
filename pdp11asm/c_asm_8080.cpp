@@ -120,6 +120,22 @@ void Asm8080::call(const char* name, uint16_t addr)
 
 //---------------------------------------------------------------------------------------------------------------------
 
+void Asm8080::jmp_far(const char* name, uint16_t addr)
+{
+    // Сохранить все переменные
+    in.flush();
+
+    // CALL
+    c.out.write8(0xC3);
+    if(name[0] != 0) c.addFixup(Compiler::ftWord, ucase(name));
+    c.out.write16(addr);
+
+    // Регистры могут быть испорчены
+    in.no();
+}
+
+//---------------------------------------------------------------------------------------------------------------------
+
 void Asm8080::addLocalFixup(unsigned label)
 {
     fixups.push_back(Fixup(c.out.writePtr, label));
@@ -491,6 +507,7 @@ void Asm8080::realSave(char id, uint16_t addr, const char* name, GlobalVar* uid)
             // Теперь в HL находится тоже значение, что и в переменной
             in.hl.uid=uid;
             in.hl.value=true;
+            break;
         default:
             throw;
     }

@@ -124,6 +124,19 @@ void Compiler8080::compileOperatorSet(NodeOperator* r, unsigned d)
     if(d == 1) ur = pushAcc1();
 
     // Команды процессора работающие с непосредственной константой
+    if(aa->var->nodeType == ntConst)
+    {
+        // Команды процессора сохраняющие значение по непосредственному адресу.
+        //! Эта команда должна оставлять значение в стеке!
+        NodeConst* bb = aa->var->cast<NodeConst>();
+
+        // Компиляция второго значения в A или HL
+        compileVar(r->b, 0, 0);
+
+        // Выполнение операции
+        out.mov_pimm_arg1(r->b->dataType.b(), bb->text.c_str(), bb->value);
+    }
+    else
     if(r->b->nodeType == ntConst)
     {
         NodeConst* c = r->b->cast<NodeConst>();
@@ -135,33 +148,18 @@ void Compiler8080::compileOperatorSet(NodeOperator* r, unsigned d)
     }
     else
     {
-        // Команды процессора сохраняющие значение по непосредственному адресу.
-        //! Эта команда должна оставлять значение в стеке!
-        if(aa->var->nodeType == ntConst)
-        {
-            NodeConst* bb = aa->var->cast<NodeConst>();
+        // Компиляция первого значения в A или HL
+        compileVar(aa->var, 0, 0);
 
-            // Компиляция второго значения в A или HL
-            compileVar(r->b, 0, 0);
+        // Компиляция второго значения в D или DE
+        UsedRegs ac(this, aa->var->dataType.b());
+        compileVar(r->b, 1, 0);
 
-            // Выполнение операции
-            out.mov_pimm_arg1(r->b->dataType.b(), bb->text.c_str(), bb->value);
-        }
-        else
-        {
-            // Компиляция первого значения в A или HL
-            compileVar(aa->var, 0, 0);
+        // Выполнение операции
+        out.mov_ptr1_arg2(r->dataType.b());
 
-            // Компиляция второго значения в D или DE
-            UsedRegs ac(this, aa->var->dataType.b());
-            compileVar(r->b, 1, 0);
-
-            // Выполнение операции
-            out.mov_ptr1_arg2(r->dataType.b());
-
-            // Значение в HL
-            if(r->o != oSetVoid) out.xchg();
-        }
+        // Значение в HL
+        if(r->o != oSetVoid) out.xchg();
     }
 
     // Перенос ARG1->ARG2 и восстановление аккумулятора из стека.
@@ -471,18 +469,20 @@ void Compiler8080::compileVar(Node* n, unsigned d, IfOpt* ifOpt)
         case ntSwitch: // Оптимизированый выбор
         {
             NodeSwitch* s = n->cast<NodeSwitch>();
-            if(s->var) compileVar(s->var, 0);
-            out.call("__switch");
+            if(s->var) compileVar(s->var, 0);            
+            if(s->cases.size() == 0) throw;
+            out.xchg();
+            unsigned v = 0;
             for(std::map<unsigned int, NodeLabel*>::iterator i=s->cases.begin(); i!=s->cases.end(); i++)
             {
-                out.addLocalFixup(i->second->n1);
-                out.c.out.write16(0);
-                out.c.out.write16(i->first);
+                out.lxi(Asm8080::r16_hl, -i->first);
+                out.dad(Asm8080::r16_de);
+                out.mov(Asm8080::r8_a, Asm8080::r8_l);
+                out.ora(Asm8080::r8_h);
+                out.jz(i->second->n1);
             }
-            out.c.out.write16(0);
             if(s->defaultLabel == 0) throw std::runtime_error("NodeSwitch->defaultLabel");
-            out.addLocalFixup(s->defaultLabel->n1);
-            out.c.out.write16(0);
+            out.jmp(s->defaultLabel->n1);
             compileBlock(s->body);
             return;
         }

@@ -916,6 +916,8 @@ Node* Parser::readCommand1()
         NodeVar* var = readVar();
         p.needToken(")");
         p.needToken("{");
+        if(!var->dataType.is16()) //! Расширение со знаком
+            var = new NodeConvert(var, cbtShort);
         NodeSwitch* s = new NodeSwitch(var);
         outOfMemory(s);
         NodeSwitch* saveSwitch = lastSwitch;

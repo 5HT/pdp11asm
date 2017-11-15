@@ -42,25 +42,22 @@ __or16:
     ora e
     mov l, a
     ret
+
+.include "include/__mul16.inc"
 {
 
 void puts(const char* msg @ hl) @ 0xF818;
+void puthex(uint8_t @ a) @ 0xF815;
+uint8_t bioskey() @ 0xF81B;
 
 unsigned char i, j;
 unsigned int* pi;
 unsigned int ii;
 uint8_t* addr;
+uint8_t a, x, y;
 
 void main()
 {
-    i = 1;
-    i = 2;
-    i = 3;
-//    i++;
-    i = ~i;
-    j = i;
-    
-/*
     addr = (uint8_t*)(0x76D0 + 78*3 + 8);
     for(i=64; i; i--)
     {
@@ -83,7 +80,37 @@ void main()
 	*addr = '*';
 	addr+=78-63;
     }
-*/
+
+    x=0, y=0;
+    for(;;)
+    {
+	a = bioskey();
+//	if(a != 0xFF) { puthex(a); puts("\r\n"); }
+	switch(a)
+	{
+	    case 0x19: // up
+		if(y==0) continue;
+		y--;
+		break;
+	    case 0x1A: // down
+		if(y==24) continue;
+		y++;
+		break;
+	    case 0x08: // left
+		if(x==0) continue;
+		x--;
+		break;
+	    case 0x18: // right
+		if(x==64) continue;
+		x++;
+		break;
+	    default:
+		continue;
+	}
+	*(uint8_t*)((0x76D0 + 78*3 + 8) + y*78 + x) = 'X';
+	while(bioskey() != 0xFF);
+    }
+
     for(;;);    
 
     // Не проходит компиляцию

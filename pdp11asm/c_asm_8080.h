@@ -117,15 +117,16 @@ public:
     void lda(const char* name, uint16_t addr=0, GlobalVar* uid=0);
     void lhld(const char* name, uint16_t addr=0, GlobalVar *uid=0);
     void call(const char* name, uint16_t addr=0);
+    void jmp_far(const char* name, uint16_t addr=0);
     void cma () { c.out.write8(0x2F); in.no(r8_a); }
     void xchg() { c.out.write8(0xEB); in.swap_hl_de(); }
     void cmp (r8 arg) { c.out.write8(0xB8 | arg); }
     void add (r8 arg) { in.flush(r8_a); c.out.write8(0x80 | arg); in.no(r8_a); }
     void adc (r8 arg) { in.flush(r8_a); c.out.write8(0x88 | arg); in.no(r8_a); }
-    void ana (r8 arg) { in.flush(r8_a); c.out.write8(0xA0 | arg); in.no(r8_a); }
+    void ana (r8 arg) { in.flush(r8_a); c.out.write8(0xA0 | arg); if(arg != r8_a) in.no(r8_a); }
     void sub (r8 arg) { in.flush(r8_a); c.out.write8(0x90 | arg); in.no(r8_a); }
     void sbb (r8 arg) { in.flush(r8_a); c.out.write8(0x98 | arg); in.no(r8_a); }
-    void ora (r8 arg) { in.flush(r8_a); c.out.write8(0xB0 | arg); in.no(r8_a); }
+    void ora (r8 arg) { in.flush(r8_a); c.out.write8(0xB0 | arg); if(arg != r8_a) in.no(r8_a); }
     void xra (r8 arg) { in.flush(r8_a); c.out.write8(0xA8 | arg); in.no(r8_a); }
     void adi (uint8_t imm) { in.flush(r8_a); c.out.write8(0xC6); c.out.write8(imm); in.no(r8_a); }
     void aci (uint8_t imm) { in.flush(r8_a); c.out.write8(0xCE); c.out.write8(imm); in.no(r8_a); }
