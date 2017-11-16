@@ -719,9 +719,9 @@ void Compiler8080::compileVar(Node* n, unsigned d, IfOpt* ifOpt)
                 {
                     out.pop(Asm8080::r16psw_de);
                     out.xchg();
-                    out.mov(Asm8080::r8_m, Asm8080::r8_d);
-                    out.dcx(Asm8080::r16_hl);
                     out.mov(Asm8080::r8_m, Asm8080::r8_e);
+                    out.inx(Asm8080::r16_hl);
+                    out.mov(Asm8080::r8_m, Asm8080::r8_d);
                 }
 
                 return;

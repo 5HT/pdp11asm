@@ -8,11 +8,11 @@ __padd16:
     inx h
     mov b, m
     xchg
-    dcx b
+    dad b
     xchg
-    mov m, e
-    dcx h
     mov m, d
+    dcx h
+    mov m, e
     mov l, c
     mov h, b
     ret
@@ -50,15 +50,10 @@ void puts(const char* msg @ hl) @ 0xF818;
 void puthex(uint8_t @ a) @ 0xF815;
 uint8_t bioskey() @ 0xF81B;
 
-unsigned char i, j;
-unsigned int* pi;
-unsigned int ii;
-uint8_t* addr;
-uint8_t a, x, y;
-
 void main()
 {
-    addr = (uint8_t*)(0x76D0 + 78*3 + 8);
+    uint8_t* addr = (uint8_t*)(0x76D0 + 78*3 + 8);
+    uint8_t i;
     for(i=64; i; i--)
     {
 	*addr = '*';
@@ -81,10 +76,10 @@ void main()
 	addr+=78-63;
     }
 
-    x=0, y=0;
+    uint8_t x=0, y=0;
     for(;;)
     {
-	a = bioskey();
+	uint8_t a = bioskey();
 //	if(a != 0xFF) { puthex(a); puts("\r\n"); }
 	switch(a)
 	{

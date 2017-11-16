@@ -6,11 +6,11 @@
 0008 0004 23                   		    inx h
 0009 0005 46                   		    mov b, m
 0010 0006 EB                   		    xchg
-0011 0007 0B                   		    dcx b
+0011 0007 09                   		    dad b
 0012 0008 EB                   		    xchg
-0013 0009 73                   		    mov m, e
+0013 0009 72                   		    mov m, d
 0014 000A 2B                   		    dcx h
-0015 000B 72                   		    mov m, d
+0015 000B 73                   		    mov m, e
 0016 000C 69                   		    mov l, c
 0017 000D 60                   		    mov h, b
 0018 000E C9                   		    ret
@@ -66,171 +66,333 @@
 0026 0048                      		__MUL16_4:
 0027 0048 C1                   		  pop b
 0028 0049 C9                   		  ret
-0127 004A                      		main:
-0127 004A                      		//61     addr = (uint8_t*)(0x76D0 + 78*3 + 8);
-0127 004A 21 C2 77             		    lxi h, 077C2h
-0127 004D                      		//62     for(i=64; i; i--)
-0127 004D 3E 40                		    mvi a, 040h
-0127 004F 32 6D 01             		    sta 016Dh
-0127 0052 22 74 01             		    shld 0174h
-0127 0055 3A 6D 01             		    lda 016Dh
-0127 0058 B7                   		    ora a
-0127 0059 CA 6F 00             		    jz 06Fh
-0127 005C                      		//63     {
-0127 005C 2A 74 01             		    lhld 0174h
-0127 005F 36 2A                		    mvi m, 02Ah
-0127 0061                      		//65 	addr++;
-0127 0061 23                   		    inx h
-0127 0062 22 74 01             		    shld 0174h
-0127 0065 3A 6D 01             		    lda 016Dh
-0127 0068 3D                   		    dcr a
-0127 0069 32 6D 01             		    sta 016Dh
-0127 006C C3 55 00             		    jmp 055h
-0127 006F                      		//68     addr = (uint8_t*)(0x76D0 + 78*(3+24) + 8);
-0127 006F 21 12 7F             		    lxi h, 07F12h
-0127 0072                      		//69     for(i=64; i; i--)
-0127 0072 3E 40                		    mvi a, 040h
-0127 0074 32 6D 01             		    sta 016Dh
-0127 0077 22 74 01             		    shld 0174h
-0127 007A 3A 6D 01             		    lda 016Dh
-0127 007D B7                   		    ora a
-0127 007E CA 94 00             		    jz 094h
-0127 0081                      		//70     {
-0127 0081 2A 74 01             		    lhld 0174h
-0127 0084 36 2A                		    mvi m, 02Ah
-0127 0086                      		//72 	addr++;
-0127 0086 23                   		    inx h
-0127 0087 22 74 01             		    shld 0174h
-0127 008A 3A 6D 01             		    lda 016Dh
-0127 008D 3D                   		    dcr a
-0127 008E 32 6D 01             		    sta 016Dh
-0127 0091 C3 7A 00             		    jmp 07Ah
-0127 0094                      		//75     addr = (uint8_t*)(0x76D0 + 78*3 + 8);
-0127 0094 21 C2 77             		    lxi h, 077C2h
-0127 0097                      		//76     for(i=25; i; i--)
-0127 0097 3E 19                		    mvi a, 019h
-0127 0099 32 6D 01             		    sta 016Dh
-0127 009C 22 74 01             		    shld 0174h
-0127 009F 3A 6D 01             		    lda 016Dh
-0127 00A2 B7                   		    ora a
-0127 00A3 CA C8 00             		    jz 0C8h
-0127 00A6                      		//77     {
-0127 00A6 2A 74 01             		    lhld 0174h
-0127 00A9 36 2A                		    mvi m, 02Ah
-0127 00AB                      		//79 	addr+=63;
-0127 00AB 11 3F 00             		    lxi d, 03Fh
-0127 00AE 19                   		    dad d
-0127 00AF                      		//80 	*addr = '*';
-0127 00AF 22 74 01             		    shld 0174h
-0127 00B2 2A 74 01             		    lhld 0174h
-0127 00B5 36 2A                		    mvi m, 02Ah
-0127 00B7                      		//81 	addr+=78-63;
-0127 00B7 11 0F 00             		    lxi d, 0Fh
-0127 00BA 19                   		    dad d
-0127 00BB 22 74 01             		    shld 0174h
-0127 00BE 3A 6D 01             		    lda 016Dh
-0127 00C1 3D                   		    dcr a
-0127 00C2 32 6D 01             		    sta 016Dh
-0127 00C5 C3 9F 00             		    jmp 09Fh
-0127 00C8                      		//84     x=0, y=0;
-0127 00C8 3E 00                		    mvi a, 00h
-0127 00CA 32 77 01             		    sta 0177h
-0127 00CD 3E 00                		    mvi a, 00h
-0127 00CF                      		//85     for(;;)
-0127 00CF 32 78 01             		    sta 0178h
-0127 00D2                      		//86     {
-0127 00D2 CD 1B F8             		    call 0F81Bh
-0127 00D5                      		//89 	switch(a)
-0127 00D5 32 76 01             		    sta 0176h
-0127 00D8 3A 76 01             		    lda 0176h
-0127 00DB 6F                   		    mov l, a
-0127 00DC 26 00                		    mvi h, 00h
-0127 00DE EB                   		    xchg
-0127 00DF 21 F8 FF             		    lxi h, 0FFF8h
-0127 00E2 19                   		    dad d
-0127 00E3 7D                   		    mov a, l
-0127 00E4 B4                   		    ora h
-0127 00E5 CA 23 01             		    jz 0123h
-0127 00E8 21 E8 FF             		    lxi h, 0FFE8h
-0127 00EB 19                   		    dad d
-0127 00EC 7D                   		    mov a, l
-0127 00ED B4                   		    ora h
-0127 00EE CA 31 01             		    jz 0131h
-0127 00F1 21 E7 FF             		    lxi h, 0FFE7h
-0127 00F4 19                   		    dad d
-0127 00F5 7D                   		    mov a, l
-0127 00F6 B4                   		    ora h
-0127 00F7 CA 06 01             		    jz 0106h
-0127 00FA 21 E6 FF             		    lxi h, 0FFE6h
-0127 00FD 19                   		    dad d
-0127 00FE 7D                   		    mov a, l
-0127 00FF B4                   		    ora h
-0127 0100 CA 14 01             		    jz 0114h
-0127 0103 C3 40 01             		    jmp 0140h
-0127 0106                      		//91 	    case 0x19: // up
-0127 0106                      		//92 		if(y==0) continue;
-0127 0106 3A 78 01             		    lda 0178h
-0127 0109 B7                   		    ora a
-0127 010A CA D2 00             		    jz 0D2h
-0127 010D                      		//93 		y--;
-0127 010D 3D                   		    dcr a
-0127 010E                      		//94 		break;
-0127 010E 32 78 01             		    sta 0178h
-0127 0111 C3 43 01             		    jmp 0143h
-0127 0114                      		//95 	    case 0x1A: // down
-0127 0114                      		//96 		if(y==24) continue;
-0127 0114 3A 78 01             		    lda 0178h
-0127 0117 FE 18                		    cpi 018h
-0127 0119 CA D2 00             		    jz 0D2h
-0127 011C                      		//97 		y++;
-0127 011C 3C                   		    inr a
-0127 011D                      		//98 		break;
-0127 011D 32 78 01             		    sta 0178h
-0127 0120 C3 43 01             		    jmp 0143h
-0127 0123                      		//99 	    case 0x08: // left
-0127 0123                      		//100 		if(x==0) continue;
-0127 0123 3A 77 01             		    lda 0177h
-0127 0126 B7                   		    ora a
-0127 0127 CA D2 00             		    jz 0D2h
-0127 012A                      		//101 		x--;
-0127 012A 3D                   		    dcr a
-0127 012B                      		//102 		break;
-0127 012B 32 77 01             		    sta 0177h
-0127 012E C3 43 01             		    jmp 0143h
-0127 0131                      		//103 	    case 0x18: // right
-0127 0131                      		//104 		if(x==64) continue;
-0127 0131 3A 77 01             		    lda 0177h
-0127 0134 FE 40                		    cpi 040h
-0127 0136 CA D2 00             		    jz 0D2h
-0127 0139                      		//105 		x++;
-0127 0139 3C                   		    inr a
-0127 013A                      		//106 		break;
-0127 013A 32 77 01             		    sta 0177h
-0127 013D C3 43 01             		    jmp 0143h
-0127 0140                      		//107 	    default:
-0127 0140                      		//108 		continue;
-0127 0140 C3 D2 00             		    jmp 0D2h
-0127 0143                      		//110 	*(uint8_t*)((0x76D0 + 78*3 + 8) + y*78 + x) = 'X';
-0127 0143 3A 78 01             		    lda 0178h
-0127 0146 6F                   		    mov l, a
-0127 0147 26 00                		    mvi h, 00h
-0127 0149 11 4E 00             		    lxi d, 04Eh
-0127 014C CD 24 00             		    call 024h
-0127 014F 11 C2 77             		    lxi d, 077C2h
-0127 0152 19                   		    dad d
-0127 0153 E5                   		    push h
-0127 0154 3A 77 01             		    lda 0177h
-0127 0157 5F                   		    mov e, a
-0127 0158 E1                   		    pop h
-0127 0159 16 00                		    mvi d, 00h
-0127 015B 19                   		    dad d
-0127 015C 36 58                		    mvi m, 058h
-0127 015E                      		//111 	while(bioskey() != 0xFF);
-0127 015E CD 1B F8             		    call 0F81Bh
-0127 0161 FE FF                		    cpi 0FFh
-0127 0163 C2 5E 01             		    jnz 015Eh
-0127 0166 C3 D2 00             		    jmp 0D2h
-0127 0169                      		//114     for(;;);    
-0127 0169 C3 69 01             		    jmp 0169h
-0127 016C C9                   		    ret
-0128 0179 
+0122 004A                      		main:
+0122 004A 21 FA FF             		    lxi h, 0FFFAh
+0122 004D 39                   		    dad sp
+0122 004E F9                   		    sphl
+0122 004F                      		//55     uint8_t* addr = (uint8_t*)(0x76D0 + 78*3 + 8);
+0122 004F 21 00 00             		    lxi h, 00h
+0122 0052 39                   		    dad sp
+0122 0053 11 00 00             		    lxi d, 00h
+0122 0056 19                   		    dad d
+0122 0057 36 C2                		    mvi m, 0C2h
+0122 0059 23                   		    inx h
+0122 005A 36 77                		    mvi m, 077h
+0122 005C                      		//57     for(i=64; i; i--)
+0122 005C 21 00 00             		    lxi h, 00h
+0122 005F 39                   		    dad sp
+0122 0060 11 02 00             		    lxi d, 02h
+0122 0063 19                   		    dad d
+0122 0064 36 40                		    mvi m, 040h
+0122 0066 21 00 00             		    lxi h, 00h
+0122 0069 39                   		    dad sp
+0122 006A 11 02 00             		    lxi d, 02h
+0122 006D 19                   		    dad d
+0122 006E 7E                   		    mov a, m
+0122 006F B7                   		    ora a
+0122 0070 CA 9B 00             		    jz 09Bh
+0122 0073                      		//58     {
+0122 0073 21 00 00             		    lxi h, 00h
+0122 0076 39                   		    dad sp
+0122 0077 11 00 00             		    lxi d, 00h
+0122 007A 19                   		    dad d
+0122 007B 56                   		    mov d, m
+0122 007C 23                   		    inx h
+0122 007D 66                   		    mov h, m
+0122 007E 6A                   		    mov l, d
+0122 007F 36 2A                		    mvi m, 02Ah
+0122 0081                      		//60 	addr++;
+0122 0081 21 00 00             		    lxi h, 00h
+0122 0084 39                   		    dad sp
+0122 0085 11 00 00             		    lxi d, 00h
+0122 0088 19                   		    dad d
+0122 0089 11 01 00             		    lxi d, 01h
+0122 008C CD 03 00             		    call 03h
+0122 008F 21 00 00             		    lxi h, 00h
+0122 0092 39                   		    dad sp
+0122 0093 11 02 00             		    lxi d, 02h
+0122 0096 19                   		    dad d
+0122 0097 35                   		    dcr m
+0122 0098 C3 66 00             		    jmp 066h
+0122 009B                      		//63     addr = (uint8_t*)(0x76D0 + 78*(3+24) + 8);
+0122 009B 21 00 00             		    lxi h, 00h
+0122 009E 39                   		    dad sp
+0122 009F 11 00 00             		    lxi d, 00h
+0122 00A2 19                   		    dad d
+0122 00A3 36 12                		    mvi m, 012h
+0122 00A5 23                   		    inx h
+0122 00A6 36 7F                		    mvi m, 07Fh
+0122 00A8                      		//64     for(i=64; i; i--)
+0122 00A8 21 00 00             		    lxi h, 00h
+0122 00AB 39                   		    dad sp
+0122 00AC 11 02 00             		    lxi d, 02h
+0122 00AF 19                   		    dad d
+0122 00B0 36 40                		    mvi m, 040h
+0122 00B2 21 00 00             		    lxi h, 00h
+0122 00B5 39                   		    dad sp
+0122 00B6 11 02 00             		    lxi d, 02h
+0122 00B9 19                   		    dad d
+0122 00BA 7E                   		    mov a, m
+0122 00BB B7                   		    ora a
+0122 00BC CA E7 00             		    jz 0E7h
+0122 00BF                      		//65     {
+0122 00BF 21 00 00             		    lxi h, 00h
+0122 00C2 39                   		    dad sp
+0122 00C3 11 00 00             		    lxi d, 00h
+0122 00C6 19                   		    dad d
+0122 00C7 56                   		    mov d, m
+0122 00C8 23                   		    inx h
+0122 00C9 66                   		    mov h, m
+0122 00CA 6A                   		    mov l, d
+0122 00CB 36 2A                		    mvi m, 02Ah
+0122 00CD                      		//67 	addr++;
+0122 00CD 21 00 00             		    lxi h, 00h
+0122 00D0 39                   		    dad sp
+0122 00D1 11 00 00             		    lxi d, 00h
+0122 00D4 19                   		    dad d
+0122 00D5 11 01 00             		    lxi d, 01h
+0122 00D8 CD 03 00             		    call 03h
+0122 00DB 21 00 00             		    lxi h, 00h
+0122 00DE 39                   		    dad sp
+0122 00DF 11 02 00             		    lxi d, 02h
+0122 00E2 19                   		    dad d
+0122 00E3 35                   		    dcr m
+0122 00E4 C3 B2 00             		    jmp 0B2h
+0122 00E7                      		//70     addr = (uint8_t*)(0x76D0 + 78*3 + 8);
+0122 00E7 21 00 00             		    lxi h, 00h
+0122 00EA 39                   		    dad sp
+0122 00EB 11 00 00             		    lxi d, 00h
+0122 00EE 19                   		    dad d
+0122 00EF 36 C2                		    mvi m, 0C2h
+0122 00F1 23                   		    inx h
+0122 00F2 36 77                		    mvi m, 077h
+0122 00F4                      		//71     for(i=25; i; i--)
+0122 00F4 21 00 00             		    lxi h, 00h
+0122 00F7 39                   		    dad sp
+0122 00F8 11 02 00             		    lxi d, 02h
+0122 00FB 19                   		    dad d
+0122 00FC 36 19                		    mvi m, 019h
+0122 00FE 21 00 00             		    lxi h, 00h
+0122 0101 39                   		    dad sp
+0122 0102 11 02 00             		    lxi d, 02h
+0122 0105 19                   		    dad d
+0122 0106 7E                   		    mov a, m
+0122 0107 B7                   		    ora a
+0122 0108 CA 5F 01             		    jz 015Fh
+0122 010B                      		//72     {
+0122 010B 21 00 00             		    lxi h, 00h
+0122 010E 39                   		    dad sp
+0122 010F 11 00 00             		    lxi d, 00h
+0122 0112 19                   		    dad d
+0122 0113 56                   		    mov d, m
+0122 0114 23                   		    inx h
+0122 0115 66                   		    mov h, m
+0122 0116 6A                   		    mov l, d
+0122 0117 36 2A                		    mvi m, 02Ah
+0122 0119                      		//74 	addr+=63;
+0122 0119 21 00 00             		    lxi h, 00h
+0122 011C 39                   		    dad sp
+0122 011D 11 00 00             		    lxi d, 00h
+0122 0120 19                   		    dad d
+0122 0121 E5                   		    push h
+0122 0122 56                   		    mov d, m
+0122 0123 23                   		    inx h
+0122 0124 66                   		    mov h, m
+0122 0125 6A                   		    mov l, d
+0122 0126 11 3F 00             		    lxi d, 03Fh
+0122 0129 19                   		    dad d
+0122 012A D1                   		    pop d
+0122 012B EB                   		    xchg
+0122 012C 73                   		    mov m, e
+0122 012D 23                   		    inx h
+0122 012E 72                   		    mov m, d
+0122 012F                      		//75 	*addr = '*';
+0122 012F 21 00 00             		    lxi h, 00h
+0122 0132 39                   		    dad sp
+0122 0133 11 00 00             		    lxi d, 00h
+0122 0136 19                   		    dad d
+0122 0137 56                   		    mov d, m
+0122 0138 23                   		    inx h
+0122 0139 66                   		    mov h, m
+0122 013A 6A                   		    mov l, d
+0122 013B 36 2A                		    mvi m, 02Ah
+0122 013D                      		//76 	addr+=78-63;
+0122 013D 21 00 00             		    lxi h, 00h
+0122 0140 39                   		    dad sp
+0122 0141 11 00 00             		    lxi d, 00h
+0122 0144 19                   		    dad d
+0122 0145 E5                   		    push h
+0122 0146 56                   		    mov d, m
+0122 0147 23                   		    inx h
+0122 0148 66                   		    mov h, m
+0122 0149 6A                   		    mov l, d
+0122 014A 11 0F 00             		    lxi d, 0Fh
+0122 014D 19                   		    dad d
+0122 014E D1                   		    pop d
+0122 014F EB                   		    xchg
+0122 0150 73                   		    mov m, e
+0122 0151 23                   		    inx h
+0122 0152 72                   		    mov m, d
+0122 0153 21 00 00             		    lxi h, 00h
+0122 0156 39                   		    dad sp
+0122 0157 11 02 00             		    lxi d, 02h
+0122 015A 19                   		    dad d
+0122 015B 35                   		    dcr m
+0122 015C C3 FE 00             		    jmp 0FEh
+0122 015F                      		//79     uint8_t x=0, y=0;
+0122 015F 21 00 00             		    lxi h, 00h
+0122 0162 39                   		    dad sp
+0122 0163 11 03 00             		    lxi d, 03h
+0122 0166 19                   		    dad d
+0122 0167 36 00                		    mvi m, 00h
+0122 0169 21 00 00             		    lxi h, 00h
+0122 016C 39                   		    dad sp
+0122 016D 11 04 00             		    lxi d, 04h
+0122 0170 19                   		    dad d
+0122 0171 36 00                		    mvi m, 00h
+0122 0173                      		//80     for(;;)
+0122 0173                      		//81     {
+0122 0173 21 00 00             		    lxi h, 00h
+0122 0176 39                   		    dad sp
+0122 0177 11 05 00             		    lxi d, 05h
+0122 017A 19                   		    dad d
+0122 017B E5                   		    push h
+0122 017C CD 1B F8             		    call 0F81Bh
+0122 017F 5F                   		    mov e, a
+0122 0180 E1                   		    pop h
+0122 0181 73                   		    mov m, e
+0122 0182                      		//84 	switch(a)
+0122 0182 21 00 00             		    lxi h, 00h
+0122 0185 39                   		    dad sp
+0122 0186 11 05 00             		    lxi d, 05h
+0122 0189 19                   		    dad d
+0122 018A 7E                   		    mov a, m
+0122 018B 6F                   		    mov l, a
+0122 018C 26 00                		    mvi h, 00h
+0122 018E EB                   		    xchg
+0122 018F 21 F8 FF             		    lxi h, 0FFF8h
+0122 0192 19                   		    dad d
+0122 0193 7D                   		    mov a, l
+0122 0194 B4                   		    ora h
+0122 0195 CA E9 01             		    jz 01E9h
+0122 0198 21 E8 FF             		    lxi h, 0FFE8h
+0122 019B 19                   		    dad d
+0122 019C 7D                   		    mov a, l
+0122 019D B4                   		    ora h
+0122 019E CA 02 02             		    jz 0202h
+0122 01A1 21 E7 FF             		    lxi h, 0FFE7h
+0122 01A4 19                   		    dad d
+0122 01A5 7D                   		    mov a, l
+0122 01A6 B4                   		    ora h
+0122 01A7 CA B6 01             		    jz 01B6h
+0122 01AA 21 E6 FF             		    lxi h, 0FFE6h
+0122 01AD 19                   		    dad d
+0122 01AE 7D                   		    mov a, l
+0122 01AF B4                   		    ora h
+0122 01B0 CA CF 01             		    jz 01CFh
+0122 01B3 C3 1C 02             		    jmp 021Ch
+0122 01B6                      		//86 	    case 0x19: // up
+0122 01B6                      		//87 		if(y==0) continue;
+0122 01B6 21 00 00             		    lxi h, 00h
+0122 01B9 39                   		    dad sp
+0122 01BA 11 04 00             		    lxi d, 04h
+0122 01BD 19                   		    dad d
+0122 01BE 7E                   		    mov a, m
+0122 01BF B7                   		    ora a
+0122 01C0 CA 73 01             		    jz 0173h
+0122 01C3                      		//88 		y--;
+0122 01C3 21 00 00             		    lxi h, 00h
+0122 01C6 39                   		    dad sp
+0122 01C7 11 04 00             		    lxi d, 04h
+0122 01CA 19                   		    dad d
+0122 01CB 35                   		    dcr m
+0122 01CC                      		//89 		break;
+0122 01CC C3 1F 02             		    jmp 021Fh
+0122 01CF                      		//90 	    case 0x1A: // down
+0122 01CF                      		//91 		if(y==24) continue;
+0122 01CF 21 00 00             		    lxi h, 00h
+0122 01D2 39                   		    dad sp
+0122 01D3 11 04 00             		    lxi d, 04h
+0122 01D6 19                   		    dad d
+0122 01D7 7E                   		    mov a, m
+0122 01D8 FE 18                		    cpi 018h
+0122 01DA CA 73 01             		    jz 0173h
+0122 01DD                      		//92 		y++;
+0122 01DD 21 00 00             		    lxi h, 00h
+0122 01E0 39                   		    dad sp
+0122 01E1 11 04 00             		    lxi d, 04h
+0122 01E4 19                   		    dad d
+0122 01E5 34                   		    inr m
+0122 01E6                      		//93 		break;
+0122 01E6 C3 1F 02             		    jmp 021Fh
+0122 01E9                      		//94 	    case 0x08: // left
+0122 01E9                      		//95 		if(x==0) continue;
+0122 01E9 21 00 00             		    lxi h, 00h
+0122 01EC 39                   		    dad sp
+0122 01ED 11 03 00             		    lxi d, 03h
+0122 01F0 19                   		    dad d
+0122 01F1 7E                   		    mov a, m
+0122 01F2 B7                   		    ora a
+0122 01F3 CA 73 01             		    jz 0173h
+0122 01F6                      		//96 		x--;
+0122 01F6 21 00 00             		    lxi h, 00h
+0122 01F9 39                   		    dad sp
+0122 01FA 11 03 00             		    lxi d, 03h
+0122 01FD 19                   		    dad d
+0122 01FE 35                   		    dcr m
+0122 01FF                      		//97 		break;
+0122 01FF C3 1F 02             		    jmp 021Fh
+0122 0202                      		//98 	    case 0x18: // right
+0122 0202                      		//99 		if(x==64) continue;
+0122 0202 21 00 00             		    lxi h, 00h
+0122 0205 39                   		    dad sp
+0122 0206 11 03 00             		    lxi d, 03h
+0122 0209 19                   		    dad d
+0122 020A 7E                   		    mov a, m
+0122 020B FE 40                		    cpi 040h
+0122 020D CA 73 01             		    jz 0173h
+0122 0210                      		//100 		x++;
+0122 0210 21 00 00             		    lxi h, 00h
+0122 0213 39                   		    dad sp
+0122 0214 11 03 00             		    lxi d, 03h
+0122 0217 19                   		    dad d
+0122 0218 34                   		    inr m
+0122 0219                      		//101 		break;
+0122 0219 C3 1F 02             		    jmp 021Fh
+0122 021C                      		//102 	    default:
+0122 021C                      		//103 		continue;
+0122 021C C3 73 01             		    jmp 0173h
+0122 021F                      		//105 	*(uint8_t*)((0x76D0 + 78*3 + 8) + y*78 + x) = 'X';
+0122 021F 21 00 00             		    lxi h, 00h
+0122 0222 39                   		    dad sp
+0122 0223 11 04 00             		    lxi d, 04h
+0122 0226 19                   		    dad d
+0122 0227 7E                   		    mov a, m
+0122 0228 6F                   		    mov l, a
+0122 0229 26 00                		    mvi h, 00h
+0122 022B 11 4E 00             		    lxi d, 04Eh
+0122 022E CD 24 00             		    call 024h
+0122 0231 11 C2 77             		    lxi d, 077C2h
+0122 0234 19                   		    dad d
+0122 0235 E5                   		    push h
+0122 0236 21 02 00             		    lxi h, 02h
+0122 0239 39                   		    dad sp
+0122 023A 11 03 00             		    lxi d, 03h
+0122 023D 19                   		    dad d
+0122 023E 5E                   		    mov e, m
+0122 023F E1                   		    pop h
+0122 0240 16 00                		    mvi d, 00h
+0122 0242 19                   		    dad d
+0122 0243 36 58                		    mvi m, 058h
+0122 0245                      		//106 	while(bioskey() != 0xFF);
+0122 0245 CD 1B F8             		    call 0F81Bh
+0122 0248 FE FF                		    cpi 0FFh
+0122 024A C2 45 02             		    jnz 0245h
+0122 024D C3 73 01             		    jmp 0173h
+0122 0250                      		//109     for(;;);    
+0122 0250 C3 50 02             		    jmp 0250h
+0122 0253 21 06 00             		    lxi h, 06h
+0122 0256 39                   		    dad sp
+0122 0257 F9                   		    sphl
+0122 0258 C9                   		    ret
+0123 0259 
