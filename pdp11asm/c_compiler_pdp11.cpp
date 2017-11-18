@@ -272,8 +272,6 @@ bool CompilerPdp11::compileDualArg(Arg11& al, Arg11& ah, Arg11& bl, Arg11& bh, b
 
 void CompilerPdp11::compileVar(Node* n, unsigned d, IfOpt* ifOpt)
 {
-//    printf("---%u\n", n->nodeType);
-
     if(!n->remark.empty() && out.step==1)
         out.c.lstWriter.remark(out.c.out.writePtr, 0, n->remark.c_str());
 

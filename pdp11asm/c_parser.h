@@ -12,6 +12,7 @@ namespace C
         ::Parser& p;
         Tree& world;
 
+        /*
         class StackVar
         {
         public:
@@ -21,14 +22,15 @@ namespace C
             bool        arg;
             bool        reg;
         };
+        */
 
         NodeLabel* breakLabel, *continueLabel;
         NodeSwitch* lastSwitch;
-        std::vector<StackVar> stackVars;
+        std::vector<GlobalVar> stackVars;
         Function* curFn;
 
         bool      ifToken(const std::vector<std::string>& strs, int& o);
-        StackVar* ifToken(std::vector<StackVar>& a);
+        GlobalVar* ifToken(std::vector<GlobalVar>& a);
         Function* ifToken(std::list<Function>& a);
         GlobalVar* ifToken(std::list<GlobalVar>& a);
         Operator findOperator(int level, int& l);
@@ -38,7 +40,7 @@ namespace C
         void     parseStruct(Struct& s, int m);
         NodeVar* nodeMonoOperator(NodeVar* a, MonoOperator o);
         NodeVar* nodeAddr(NodeVar* x);
-        NodeVar* getStackVar(StackVar& x);
+        NodeVar* getStackVar(GlobalVar& x);
         NodeVar* bindVar_2();
         void     operatorType(unsigned& r, bool& sig, Type& a);
         Type     readType(bool error);

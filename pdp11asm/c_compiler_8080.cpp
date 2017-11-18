@@ -256,7 +256,6 @@ void Compiler8080::compileVar(Node* n, unsigned d, IfOpt* ifOpt)
     switch(n->nodeType)
     {
         case ntLabel: // Метка
-            printf("local label %u = %u\n", n->cast<NodeLabel>()->n1, out.c.out.writePtr);
             out.addLocalLabel(n->cast<NodeLabel>()->n1);
             return;
 
@@ -898,7 +897,7 @@ void Compiler8080::compileFunction(Function* f)
     curFn = f;
 
     // Если используются стековые переменные, то резервируем под них место
-    if(f->stackSize)
+    if(f->stackSize && f->nameArea.empty())
     {
         out.lxi(Asm8080::r16_hl, -f->stackSize);
         out.dad(Asm8080::r16_sp);
@@ -922,7 +921,7 @@ void Compiler8080::compileFunction(Function* f)
     
     // Если используются стековые переменные, то освобождаем стек.
     // В HL может находится возвращаемое значение.
-    if(f->stackSize)
+    if(f->stackSize && f->nameArea.empty())
     {
         if(f->retType.is16()) out.xchg();
         out.lxi(Asm8080::r16_hl, f->stackSize); //! Использовать POP
@@ -933,6 +932,13 @@ void Compiler8080::compileFunction(Function* f)
 
     // Выход из функции
     out.ret();
+
+    // Место для переменных
+    if(!f->nameArea.empty())
+    {
+        out.c.addLabel(f->nameArea.c_str());
+        out.c.out.writePtr += f->stackSize;
+    }
 
     // Расставить адреса переходов
     out.setJumpAddresses();

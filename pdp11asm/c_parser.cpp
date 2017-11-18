@@ -9,14 +9,16 @@
 #include "tools.h"
 #include "fstools.h"
 
+const bool fastLocal = true;
+
 namespace C
 {
 
 //---------------------------------------------------------------------------------------------------------------------
 
-Parser::StackVar* Parser::ifToken(std::vector<StackVar>& a)
+GlobalVar* Parser::ifToken(std::vector<GlobalVar>& a)
 {
-    for(std::vector<StackVar>::iterator i=a.begin(); i!=a.end(); i++)
+    for(std::vector<GlobalVar>::iterator i=a.begin(); i!=a.end(); i++)
         if(p.ifToken(i->name.c_str()))
             return &*i;
     return 0;
@@ -47,7 +49,7 @@ GlobalVar* Parser::ifToken(std::list<GlobalVar>& a)
 
 bool Parser::checkStackUnique(const char* str) //! Заменить это потом на более оптимальное
 {
-    for(std::vector<StackVar>::iterator i=stackVars.begin(); i!=stackVars.end(); i++)
+    for(std::vector<GlobalVar>::iterator i=stackVars.begin(); i!=stackVars.end(); i++)
         if(i->name == str)
             return false;
     return true;
@@ -55,12 +57,20 @@ bool Parser::checkStackUnique(const char* str) //! Заменить это по�
 
 //---------------------------------------------------------------------------------------------------------------------
 
-NodeVar* Parser::getStackVar(StackVar& x)
+NodeVar* Parser::getStackVar(GlobalVar &x)
 {
+    if(fastLocal)
+    {
+        NodeConst* c = new NodeConst(x.type, x.stack_addr, curFn->nameArea.c_str());
+        if(x.type.arr) return c;
+        c->uid = &x;
+        c->dataType.addr++;
+        return new NodeDeaddr(c);
+    }
     Type t = x.type;
     if(!t.arr) t.addr++;
-    NodeConst* c = outOfMemory(new NodeConst(t, x.addr, "")); // curFn->name+"_"+x.name
-    if(x.arg) c->prepare = true;
+    NodeConst* c = outOfMemory(new NodeConst(t, x.stack_addr, "")); // curFn->name+"_"+x.name
+    if(x.stack_arg) c->prepare = true;
     NodeVar* r = outOfMemory(new NodeOperator(c->dataType, oAdd, c, outOfMemory(new NodeSP)));
     if(!t.arr)
     {
@@ -85,7 +95,6 @@ NodeVar* Parser::nodeConvert(NodeVar* x, Type type, bool auto_convert)
             if(type.is8()) x->cast<NodeConst>()->value &= 0xFF; else //! Предупреждение о переполнении
             if(type.is16()) x->cast<NodeConst>()->value &= 0xFFFF;
         }
-        printf("convert const %u -> %u\n", x->dataType.baseType, type.baseType);
         x->dataType = type;
         return x;
     }
@@ -160,7 +169,7 @@ NodeVar* Parser::bindVar_2()
     }
 
     // Стековая переменная
-    StackVar* s = ifToken(stackVars);
+    GlobalVar* s = ifToken(stackVars);
     if(s) return getStackVar(*s);
 
     // Глобальная переменная
@@ -255,11 +264,6 @@ NodeVar* Parser::nodeOperator2(Type type, Operator o, NodeVar* a, NodeVar* b)
     if(pdp11mode)
     {
         if(o == oAnd || o==oSAnd) b = nodeMonoOperator(b, moXor); //!!! Приоритет у константы или регистра (т.е. прошлое вычисление дало регистр)
-    }
-
-    if(a->dataType.baseType != b->dataType.baseType)
-    {
-        printf("op %u a %u b %u\n", o, a->dataType.baseType, b->dataType.baseType);
     }
 
     return outOfMemory(new NodeOperator(type, o, a, b));
@@ -974,7 +978,7 @@ Node* Parser::readCommand1()
             }
 
             // Адрес в стеке
-            unsigned stackOff = (stackVars.size()==0 || stackVars.back().arg) ? 0 : (stackVars.back().addr + stackVars.back().type.size());
+            unsigned stackOff = (stackVars.size()==0 || stackVars.back().stack_arg) ? 0 : (stackVars.back().stack_addr + stackVars.back().type.size());
             if(t1.size()>=2) stackOff = (stackOff + 1 ) & ~1;
 
             // Размер стека
@@ -982,11 +986,11 @@ Node* Parser::readCommand1()
             if(curFn->stackSize < stackSize) curFn->stackSize = stackSize;
 
             // Сохраняем информацию
-            stackVars.push_back(StackVar());
-            StackVar& v = stackVars.back();
+            stackVars.push_back(GlobalVar());
+            GlobalVar& v = stackVars.back();
             v.name = n;
-            v.addr = stackOff;
-            v.arg  = false;
+            v.stack_addr = stackOff;
+            v.stack_arg  = false;
             v.type = t1;
             v.reg  = reg;
 
@@ -1063,8 +1067,8 @@ Function* Parser::parseFunction(Type& retType, const std::string& name)
             readModifiers(t);
             if(t.baseType==cbtVoid && t.addr==0) break;
 
-            stackVars.push_back(StackVar());
-            StackVar& v = stackVars.back();
+            stackVars.push_back(GlobalVar());
+            GlobalVar& v = stackVars.back();
 
             if(p.ifToken(ttWord))
             {
@@ -1096,8 +1100,8 @@ Function* Parser::parseFunction(Type& retType, const std::string& name)
 
             argTypes.push_back(FunctionArg(n, t, reg));
 
-            v.addr = off;
-            v.arg  = true;
+            v.stack_addr = off;
+            v.stack_arg  = true;
             v.type = t;
 
             off += v.type.size();
@@ -1111,6 +1115,7 @@ Function* Parser::parseFunction(Type& retType, const std::string& name)
         f = world.addFunction(name.c_str());
         f->args    = argTypes;
         f->retType = retType;
+        if(fastLocal) f->nameArea = name+"$";
     }
     else
     {
@@ -1274,7 +1279,6 @@ void Parser::parse2()
         if(typedef1)
         {
             if(!world.checkUnique(name)) p.syntaxError(("Имя '" + name + "' уже используется").c_str());
-            printf("TD %s\n", name.c_str());
             world.addTypedef(name.c_str(), type);
         }
         else
@@ -1364,8 +1368,6 @@ void prep(::Parser& p)
         p.exitPrep();
         p.cfg = p.prepCfg;
         p.macroOff = false;
-
-        printf("INCLUDE [%s]\n", fileName);
 
         std::string buf;
         loadStringFromFile(buf, fileName);

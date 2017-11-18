@@ -396,14 +396,11 @@ void Parser::nextToken2() {
 
 void Parser::syntaxError(const char* text)
 {
-    char* s = 0;
     bool i = (token==ttWord || token==ttString1 || token==ttString2 || token==ttOperator);
-    if(asprintf(&s, "%s(%zu,%zu): %s%s%s%s", fileName.c_str(), prevLine, prevCol,
-       text ? text : "Синтаксическая ошибка", i ? " (" : "", i ? tokenText : "", i ? ")" : "") == -1)
-        throw std::runtime_error("Out of memory");
-    std::auto_ptr<char> sp(s);
-    std::string o = sp.get();
-    throw std::runtime_error(o.c_str());
+    char buf[1024];
+    snprintf(buf, sizeof(buf), "%s(%zu,%zu): %s%s%s%s", fileName.c_str(), prevLine, prevCol,
+       text ? text : "Синтаксическая ошибка", i ? " (" : "", i ? tokenText : "", i ? ")" : "");
+    throw std::runtime_error(buf);
 }
 
 //-----------------------------------------------------------------------------

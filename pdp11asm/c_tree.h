@@ -241,6 +241,7 @@ namespace C
     struct Function {
         Type                     retType;
         std::string              name;
+        std::string              nameArea;
         std::vector<FunctionArg> args;
         std::string              needInclude;
         int                      addr;
@@ -354,7 +355,10 @@ namespace C
         bool                 z;
         bool                 reg;
 
-        GlobalVar() { extren1=false; z=false; compiled=false; reg=false; }
+        unsigned stack_addr;
+        bool stack_arg;
+
+        GlobalVar() { stack_arg=false; stack_addr=0; extren1=false; z=false; compiled=false; reg=false; }
     };
 
     class Tree

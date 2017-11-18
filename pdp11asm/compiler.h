@@ -82,7 +82,6 @@ public:
 
     void addLabel(const std::string& name)
     {
-        printf("label %s = %u\n", name.c_str(), (unsigned)out.writePtr);
         labels[ucase(name)] = out.writePtr;
     }
 };
