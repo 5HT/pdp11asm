@@ -1,1 +1,0 @@
-i686-w64-mingw32-g++ -std=c++11 -m32 -mconsole -static -municode -o ../release/pdp11asm.exe *.cpp -DWIN32
