@@ -474,8 +474,9 @@ void Asm8080::mov_arg1_pimm(char pf, const char* name, uint16_t addr, GlobalVar*
 
 void Asm8080::setJumpAddresses()
 {
-    for(auto& f : fixups)
+    for(std::vector<Fixup>::iterator it=fixups.begin();it!=fixups.end();++it)
     {
+        Fixup& f = *it;
         if(f.label >= labels.size()) throw std::runtime_error("Asm8080.setJumpAddresses 1");
         unsigned ptr = labels[f.label];
         if(ptr == UINT_MAX) throw std::runtime_error("Asm8080.setJumpAddresses 2");

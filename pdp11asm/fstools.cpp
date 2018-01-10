@@ -4,7 +4,7 @@
 #include <windows.h>
 #include <stdint.h>
 #include <algorithm>
-#include <limits>
+//#include <limits>
 #include <stdexcept>
 
 void saveStringToFile(const wchar_t* fileName2, const void* buf, size_t len)
@@ -32,7 +32,7 @@ void loadStringFromFile(std::string& buffer, const wchar_t* fileName)
     HANDLE h = CreateFile(fileName, GENERIC_READ|GENERIC_WRITE, 0, 0, OPEN_EXISTING, 0, 0);
     if(h == INVALID_HANDLE_VALUE) throw std::runtime_error("Can't open file");
     uint64_t size = GetFileSize64(h);
-    if(size >= std::numeric_limits<size_t>::max()) { CloseHandle(h); throw std::runtime_error("Source file too large"); }
+    if(size >= SIZE_MAX) { CloseHandle(h); throw std::runtime_error("Source file too large"); }
     buffer.resize(size);
     DWORD wr;
     if(!ReadFile(h, (LPVOID)buffer.c_str(), buffer.size(), &wr, 0) || wr != buffer.size()) { CloseHandle(h); throw std::runtime_error("Can't open file"); }
@@ -96,6 +96,7 @@ std::wstring replaceExtension(const std::wstring& fileName, const char* ext) {
 
 #include <fstream>
 #include <limits>
+#include <stdexcept>
 #include <unistd.h>
 #include <string.h>
 
@@ -113,7 +114,7 @@ void loadStringFromFile(std::string& buf, const char* fileName) {
     std::fstream file(fileName, std::ifstream::in|std::ifstream::binary);
     if(!file.is_open()) throw std::runtime_error("Can't open source file");
     std::streamoff size = file.rdbuf()->pubseekoff(0, std::fstream::end);
-    if(size < 0 || size >= std::numeric_limits<size_t>::max()) throw std::runtime_error("Source file too large");
+    if(size < 0 || size >= SIZE_MAX) throw std::runtime_error("Source file too large");
     buf.resize((size_t)size);
     file.rdbuf()->pubseekoff(0, std::fstream::beg);
     file.rdbuf()->sgetn(const_cast<char*>(buf.c_str()), buf.size());

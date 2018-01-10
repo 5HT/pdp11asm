@@ -1,0 +1,1 @@
+g++ -m32 -mconsole -static -o ../release/pdp11asm.exe *.cpp 
