@@ -57,7 +57,7 @@ void Compiler::readArg(Arg& a) {
 
   Parser::num_t ii;
   if(ifConst3(ii)) { // Вычесть из адреса смещение, если не поствалены @ #
-    a.subip = (!x && !n);
+    a.subip = !x && !n;
     a.val = short(ii); // Без контроля переполнения
     a.used = true;
     Parser::Label pl(p);
@@ -65,12 +65,13 @@ void Compiler::readArg(Arg& a) {
       if(p.ifToken(")")) { p.jump(pl); goto xxx; }
       mode = 6;
       reg = readReg();
-      if(!x) a.subip=0;
+      if(!x) a.subip = false;
       p.needToken(")");
     } else {
 xxx:
       reg = 7;
       mode = n ? 2 : 6;
+      if(x&&!n) a.subip = true; /* SHAOS: fix for @NUMBER */
     }
     if(x) mode++;
     a.code = short((mode<<3) | reg);
@@ -91,8 +92,8 @@ xxx:
   reg = readReg();
   if(o) p.needToken(")");
   bool i = false;
-  if(o && (!d && !a.used)) i = p.ifToken("+");
-  if(x && !d && !i && !a.used) { a.used=true; a.val=0; }
+  if(o && !d && !a.used) i = p.ifToken("+");
+  if(x && !d && !i && !a. used) { a.used=true; a.val=0; }
   mode = !o ? 0 : i ? 2 : d ? 4 : a.used ? 6 : 1;
   if(x) mode++;
   a.code = short((mode<<3) | reg);

@@ -9,7 +9,7 @@ int _tmain(int argc, wchar_t** argv) {
 #else // LINUX
 int main(int argc, char** argv) {
 #endif
-    printf("PDP11/8080 Assembler/C\nPRE PRE PRE ALPHA VERSION\n2017 (c) aleksey.f.morozov@gmail.com\n");
+    printf("PDP11/8080 Assembler/C\nALPHA VERSION MODIFIED BY SHAOS\n2017 (c) aleksey.f.morozov@gmail.com\n");
     try {
         Compiler c;
 
