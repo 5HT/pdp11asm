@@ -93,7 +93,7 @@ xxx:
   if(o) p.needToken(")");
   bool i = false;
   if(o && !d && !a.used) i = p.ifToken("+");
-  if(x && !d && !i && !a. used) { a.used=true; a.val=0; }
+  if(x && !d && !i && !a.used) { a.used=true; a.val=0; }
   mode = !o ? 0 : i ? 2 : d ? 4 : a.used ? 6 : 1;
   if(x) mode++;
   a.code = short((mode<<3) | reg);

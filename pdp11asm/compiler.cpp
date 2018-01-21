@@ -9,6 +9,7 @@
 #include "c_compiler_pdp11.h"
 #include "c_compiler_8080.h"
 #include "make_radio86rk_rom.h"
+#include "make_mk85_rom.h" /* SHAOS 2018-01-21 */
 
 static unsigned char cp1251_to_koi8r_tbl[256] = {
   0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,
@@ -320,8 +321,8 @@ bool Compiler::compileLine2() {
     return true;
   }
 
-    if(p.ifToken("make_radio86rk_rom"))
-    {
+  if(p.ifToken("make_radio86rk_rom"))
+  {
         p.needToken(ttString2);
         Parser::TokenText fileName;
         strcpy(fileName, p.loadedText);
@@ -341,7 +342,27 @@ bool Compiler::compileLine2() {
             lstWriter.writeFile(fileName);
         }
         return true;
-    }
+  }
+
+  if(p.ifToken("make_mk85_rom")) /* Added by SHAOS on 2018-01-21 */
+  {
+        p.needToken(ttString2);
+        Parser::TokenText fileName;
+        strcpy(fileName, p.loadedText);
+        size_t sz = 16384;
+        if(p.ifToken(","))
+        {
+            sz = ullong2size_t(readConst3());
+        }
+        if(step2)
+        {
+            char error_buf[256];
+            if(!make_mk85_rom(fileName, sz, out.writeBuf, sizeof(out.writeBuf), error_buf, sizeof(error_buf)))
+                p.syntaxError(error_buf);
+            lstWriter.writeFile(fileName);
+        }
+        return true;
+  }
 
   if(p.ifToken("convert1251toKOI8R")) {
     convert1251toKOI8R = !p.ifToken("OFF");
